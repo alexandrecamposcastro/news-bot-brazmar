@@ -7,10 +7,10 @@ from flask_cors import CORS
 
 app = Flask(__name__)
 app.config['JSON_AS_ASCII'] = False
-app.config['LOAD_DOTENV'] = False
-
 CORS(app)
 
+# Configuração de porta para produção
+PORT = int(os.environ.get('PORT', 5000))
 
 try:
     from dotenv import load_dotenv
@@ -165,9 +165,12 @@ def api_estatisticas():
         return jsonify({"error": str(e)})
 
 if __name__ == '__main__':
-    print("🚀 Brazmar News Bot - Desenvolvimento")
-    print("🌐 ACESSE: http://localhost:5000")
-    print("🔑 Gemini:", "✅ Habilitado" if os.getenv('GEMINI_API_KEY') else "❌ Desabilitado")
+    print("🚀 Brazmar News Bot - PRODUÇÃO")
+    print(f"🔑 Gemini: {'✅ Habilitado' if os.getenv('GEMINI_API_KEY') else '❌ Desabilitado'}")
+    print(f"🌐 Servidor rodando na porta: {PORT}")
+    
+    # ✅ Configuração correta para produção
+    app.run(host='0.0.0.0', port=PORT, debug=False, threaded=True)
     
     
     # Inicia agendador se disponível
@@ -177,5 +180,3 @@ if __name__ == '__main__':
         print("✅ Agendador iniciado")
     except Exception as e:
         print(f"⚠️  Agendador não disponível: {e}")
-    
-    app.run(host='0.0.0.0', port=5000, debug=True)
