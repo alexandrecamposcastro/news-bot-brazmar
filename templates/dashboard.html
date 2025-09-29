@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BRAZMAR - Monitoramento de Notícias</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background: #f5f5f5; 
+            color: #333; 
+            line-height: 1.6;
+        }
+        .header { 
+            background: #2c3e50; 
+            color: white; 
+            padding: 2rem 1rem; 
+            text-align: center; 
+            margin-bottom: 2rem;
+        }
+        .header h1 { 
+            margin-bottom: 0.5rem; 
+            font-size: 2.5rem;
+        }
+        .header p { 
+            opacity: 0.9; 
+            font-size: 1.1rem;
+        }
+        .container { 
+            max-width: 1200px; 
+            margin: 0 auto; 
+            padding: 0 1rem; 
+        }
+        .stats-grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); 
+            gap: 1.5rem; 
+            margin: 2rem 0; 
+        }
+        .stat-card { 
+            background: white; 
+            padding: 1.5rem; 
+            border-radius: 10px; 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1); 
+            text-align: center; 
+            transition: transform 0.2s;
+        }
+        .stat-card:hover {
+            transform: translateY(-2px);
+        }
+        .stat-number { 
+            font-size: 2.5rem; 
+            font-weight: bold; 
+            margin: 0.5rem 0; 
+        }
+        .high-priority { color: #e74c3c; border-left: 4px solid #e74c3c; }
+        .medium-priority { color: #f39c12; border-left: 4px solid #f39c12; }
+        .low-priority { color: #27ae60; border-left: 4px solid #27ae60; }
+        .controls { 
+            background: white; 
+            padding: 1.5rem; 
+            border-radius: 10px; 
+            margin: 2rem 0; 
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .btn { 
+            background: #3498db; 
+            color: white; 
+            border: none; 
+            padding: 0.8rem 1.5rem; 
+            border-radius: 6px; 
+            cursor: pointer; 
+            margin: 0 0.5rem; 
+            font-size: 1rem;
+            transition: background 0.2s;
+        }
+        .btn:hover { background: #2980b9; }
+        .btn-success { background: #27ae60; }
+        .btn-success:hover { background: #219653; }
+        .btn-danger { background: #e74c3c; }
+        .btn-danger:hover { background: #c0392b; }
+        .news-list { 
+            background: white; 
+            border-radius: 10px; 
+            padding: 2rem; 
+            margin: 2rem 0; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .news-item { 
+            padding: 1.5rem; 
+            border-bottom: 1px solid #eee; 
+            margin-bottom: 1rem; 
+            border-radius: 8px;
+            transition: background 0.2s;
+        }
+        .news-item:hover {
+            background: #f8f9fa;
+        }
+        .news-item:last-child { border-bottom: none; }
+        .news-title { 
+            font-weight: bold; 
+            margin-bottom: 0.8rem; 
+            color: #2c3e50; 
+            font-size: 1.2rem;
+        }
+        .news-meta { 
+            font-size: 0.9rem; 
+            color: #666; 
+            margin-bottom: 0.8rem; 
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+        .priority-badge { 
+            display: inline-block; 
+            padding: 0.3rem 0.8rem; 
+            border-radius: 20px; 
+            color: white; 
+            font-size: 0.8rem; 
+            font-weight: bold;
+        }
+        .priority-alta { background: #e74c3c; }
+        .priority-media { background: #f39c12; }
+        .priority-baixa { background: #27ae60; }
+        .feedback-buttons {
+            margin-top: 1rem;
+            display: flex;
+            gap: 0.5rem;
+        }
+        .feedback-btn {
+            padding: 0.4rem 1rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+        .feedback-relevant { background: #27ae60; color: white; }
+        .feedback-not-relevant { background: #e74c3c; color: white; }
+        .status {
+            padding: 0.5rem;
+            border-radius: 4px;
+            margin: 0.5rem 0;
+            text-align: center;
+        }
+        .status-success { background: #d4edda; color: #155724; }
+        .status-error { background: #f8d7da; color: #721c24; }
+        .status-info { background: #d1ecf1; color: #0c5460; }
+        .footer {
+            text-align: center;
+            margin: 2rem 0;
+            color: #666;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📊 BRAZMAR - Monitoramento de Notícias</h1>
+        <p>Notícias relevantes para seguros marítimos e operações portuárias</p>
+    </div>
+
+    <div class="container">
+        <div class="controls">
+            <button class="btn" onclick="atualizarDados()">🔄 Atualizar Dados</button>
+            <button class="btn btn-success" onclick="forcarAtualizacao()">⚡ Forçar Atualização</button>
+            <button class="btn" onclick="verEstatisticas()">📈 Estatísticas</button>
+            <div id="status" class="status"></div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div>Notícias Hoje</div>
+                <div class="stat-number" id="total-hoje">0</div>
+                <div>Total coletadas hoje</div>
+            </div>
+            <div class="stat-card high-priority">
+                <div>Alta Prioridade</div>
+                <div class="stat-number" id="alta-prioridade">0</div>
+                <div>Requer atenção imediata</div>
+            </div>
+            <div class="stat-card medium-priority">
+                <div>Média Prioridade</div>
+                <div class="stat-number" id="media-prioridade">0</div>
+                <div>Importantes para monitorar</div>
+            </div>
+            <div class="stat-card low-priority">
+                <div>Baixa Prioridade</div>
+                <div class="stat-number" id="baixa-prioridade">0</div>
+                <div>Informações relevantes</div>
+            </div>
+        </div>
+
+        <div class="news-list">
+            <h2 style="margin-bottom: 1.5rem;">📰 Últimas Notícias Relevantes</h2>
+            <div id="lista-noticias">
+                <p>Carregando notícias...</p>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>Última atualização: <span id="ultima-atualizacao">-</span></p>
+            <p>Total de notícias no sistema: <span id="total-geral">0</span></p>
+        </div>
+    </div>
+
+    <script>
+        async function carregarDados() {
+            try {
+                mostrarStatus('⏳ Carregando dados...', 'info');
+                
+                const response = await fetch('/api/noticias');
+                const data = await response.json();
+                
+                // Atualiza estatísticas
+                document.getElementById('total-hoje').textContent = data.total_artigos;
+                document.getElementById('alta-prioridade').textContent = data.alta_prioridade;
+                document.getElementById('media-prioridade').textContent = data.media_prioridade;
+                document.getElementById('baixa-prioridade').textContent = data.baixa_prioridade;
+                document.getElementById('ultima-atualizacao').textContent = formatarData(data.ultima_atualizacao);
+                document.getElementById('total-geral').textContent = data.total_geral;
+                
+                // Atualiza lista de notícias
+                const lista = document.getElementById('lista-noticias');
+                if (data.artigos_hoje.length === 0) {
+                    lista.innerHTML = '<p style="text-align: center; padding: 2rem; color: #666;">Nenhuma notícia relevante hoje.</p>';
+                } else {
+                    lista.innerHTML = data.artigos_hoje.map(artigo => `
+                        <div class="news-item">
+                            <div class="news-title">${escapeHtml(artigo.title)}</div>
+                            <div class="news-meta">
+                                <span class="priority-badge priority-${artigo.urgencia ? artigo.urgencia.toLowerCase() : 'baixa'}">
+                                    ${artigo.urgencia || 'BAIXA'}
+                                </span>
+                                <span>Fonte: ${escapeHtml(artigo.source)}</span>
+                                <span>Confiança: ${artigo.confianca || 0}%</span>
+                                ${artigo.ai_analyzed ? '<span>✅ Analisado por IA</span>' : ''}
+                            </div>
+                            <div class="news-summary">${escapeHtml(artigo.summary)}</div>
+                            <div style="margin-top: 0.5rem;">
+                                <a href="${artigo.link}" target="_blank" style="color: #3498db; text-decoration: none;">🔗 Ver notícia completa</a>
+                            </div>
+                            <div class="feedback-buttons">
+                                <button class="feedback-btn feedback-relevant" onclick="enviarFeedback('${encodeURIComponent(artigo.title)}', '${encodeURIComponent(artigo.summary)}', true)">
+                                    👍 Relevante
+                                </button>
+                                <button class="feedback-btn feedback-not-relevant" onclick="enviarFeedback('${encodeURIComponent(artigo.title)}', '${encodeURIComponent(artigo.summary)}', false)">
+                                    👎 Não Relevante
+                                </button>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+                
+                mostrarStatus('✅ Dados atualizados com sucesso', 'success');
+                
+            } catch (error) {
+                console.error('Erro:', error);
+                mostrarStatus('❌ Erro ao carregar dados', 'error');
+            }
+        }
+
+        async function forcarAtualizacao() {
+            mostrarStatus('⏳ Iniciando atualização...', 'info');
+            
+            try {
+                const response = await fetch('/api/atualizar', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    mostrarStatus(`✅ ${result.message}`, 'success');
+                    // Aguarda 5 segundos e recarrega os dados
+                    setTimeout(carregarDados, 5000);
+                } else {
+                    mostrarStatus(`❌ ${result.message}`, 'error');
+                }
+            } catch (error) {
+                mostrarStatus('❌ Erro na atualização', 'error');
+                console.error('Erro:', error);
+            }
+        }
+
+        async function enviarFeedback(titulo, resumo, relevante) {
+            try {
+                const response = await fetch('/api/feedback', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        title: decodeURIComponent(titulo),
+                        summary: decodeURIComponent(resumo),
+                        relevant: relevante
+                    })
+                });
+                
+                const result = await response.json();
+                if (result.status === 'success') {
+                    mostrarStatus('✅ Feedback enviado com sucesso!', 'success');
+                } else {
+                    mostrarStatus('❌ Erro ao enviar feedback', 'error');
+                }
+            } catch (error) {
+                mostrarStatus('❌ Erro de conexão', 'error');
+                console.error('Erro:', error);
+            }
+        }
+
+        async function verEstatisticas() {
+            try {
+                const response = await fetch('/api/estatisticas');
+                const stats = await response.json();
+                
+                alert(`📊 Estatísticas do Sistema:\n\n` +
+                      `Feedback recebido: ${stats.feedback.total}\n` +
+                      `- Relevantes: ${stats.feedback.relevantes}\n` +
+                      `- Irrelevantes: ${stats.feedback.irrelevantes}\n\n` +
+                      `Modelo ML: ${stats.modelo_treinado ? '✅ Treinado' : '❌ Não treinado'}\n` +
+                      `Gemini: ${stats.gemini_habilitado ? '✅ Habilitado' : '❌ Desabilitado'}`);
+            } catch (error) {
+                alert('Erro ao carregar estatísticas');
+            }
+        }
+
+        function mostrarStatus(mensagem, tipo) {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = mensagem;
+            statusEl.className = 'status';
+            
+            if (tipo === 'success') statusEl.classList.add('status-success');
+            else if (tipo === 'error') statusEl.classList.add('status-error');
+            else if (tipo === 'info') statusEl.classList.add('status-info');
+            
+            // Limpa após 5 segundos (exceto erros)
+            if (tipo !== 'error') {
+                setTimeout(() => {
+                    if (statusEl.textContent === mensagem) {
+                        statusEl.textContent = '';
+                        statusEl.className = 'status';
+                    }
+                }, 5000);
+            }
+        }
+
+        function formatarData(dataString) {
+            if (!dataString || dataString === 'Nunca') return 'Nunca';
+            try {
+                const data = new Date(dataString);
+                return data.toLocaleString('pt-BR');
+            } catch {
+                return dataString;
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function atualizarDados() {
+            carregarDados();
+        }
+
+        // Carrega dados ao abrir a página
+        document.addEventListener('DOMContentLoaded', carregarDados);
+        
+        // Atualiza a cada 5 minutos
+        setInterval(carregarDados, 300000);
+    </script>
+</body>
+</html>
