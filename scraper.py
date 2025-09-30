@@ -5,184 +5,203 @@ from urllib.parse import urlparse
 import time
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+import re
 
-
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-
-from deep_translator import GoogleTranslator
-translator = GoogleTranslator(source='pt', target='en')  # Config global para PT → EN
-
-# Resumização (importa de processor)
+# Configuração simplificada - removendo tradução problemática
 from processor import summarize_text
 
-# Keywords genéricas (local)
-GENERIC_MARITIME_KEYWORDS = ["porto", "navio", "marítimo", "shipping", "carga", "terminal", "logística", "offshore", "regulamentação", "marinha", "antaq"]
+# Keywords em português para filtro inicial
+GENERIC_MARITIME_KEYWORDS = [
+    "porto", "navio", "marítimo", "shipping", "carga", "terminal", 
+    "logística", "offshore", "regulamentação", "marinha", "antaq",
+    "brasil", "brasileiro", "portos", "marítima", "cabotagem",
+    "transporte", "mercante", "exportação", "importação", "alfândega"
+]
 
 from sources import RSS_FEEDS, SCRAPE_SITES
 
 def create_session_with_retries(max_retries=3):
+    """Cria sessão com retry strategy"""
     session = requests.Session()
-    retry_strategy = Retry(total=max_retries, backoff_factor=1, status_forcelist=[429, 500, 502, 503, 504, 10054])
+    retry_strategy = Retry(
+        total=max_retries,
+        backoff_factor=1,
+        status_forcelist=[429, 500, 502, 503, 504],
+    )
     adapter = HTTPAdapter(max_retries=retry_strategy)
     session.mount("http://", adapter)
     session.mount("https://", adapter)
     return session
 
-def get_selenium_driver():
-    options = Options()
-    options.add_argument("--headless")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-    service = Service(ChromeDriverManager().install())
-    driver = webdriver.Chrome(service=service, options=options)
-    return driver
+def clean_text(text):
+    """Limpa e formata texto"""
+    if not text:
+        return ""
+    # Remove múltiplos espaços e quebras de linha
+    text = re.sub(r'\s+', ' ', text)
+    # Remove caracteres especiais problemáticos
+    text = re.sub(r'[^\w\s.,!?;-]', '', text)
+    return text.strip()
 
-def extract_with_selenium(url):
-    driver = None
+def get_article_text(url, session):
+    """Extrai texto do artigo de forma simplificada"""
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    }
+    
     try:
-        print(f"[SELENIUM] Extraindo {url}...")
-        driver = get_selenium_driver()
-        driver.get(url)
-        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
-        full_text = driver.find_element(By.TAG_NAME, "body").text
-        full_text = ' '.join(full_text.split())[:3000]
-        return full_text
+        response = session.get(url, headers=headers, timeout=15)
+        response.raise_for_status()
+        
+        soup = BeautifulSoup(response.content, 'html.parser')
+        
+        # Remove elementos indesejados
+        for element in soup(['script', 'style', 'nav', 'footer', 'header']):
+            element.decompose()
+        
+        # Tenta encontrar conteúdo principal
+        content_selectors = [
+            'article', '.post-content', '.entry-content', 
+            '.noticia-conteudo', '.content', '.main-content'
+        ]
+        
+        content_element = None
+        for selector in content_selectors:
+            content_element = soup.select_one(selector)
+            if content_element:
+                break
+        
+        if content_element:
+            text = content_element.get_text()
+        else:
+            text = soup.get_text()
+        
+        # Limpa o texto
+        text = clean_text(text)
+        
+        if len(text) < 100:
+            return "Conteúdo não disponível para resumo."
+            
+        return text[:2500]  # Limita tamanho
+        
     except Exception as e:
-        print(f"[SELENIUM ERROR] {url}: {e}")
-        return "Texto não disponível."
-    finally:
-        if driver:
-            driver.quit()
-
-def translate_to_english(text):
-    """Traduz texto para inglês usando deep-translator (Google)."""
-    if not text or len(text) < 10:
-        return text
-    try:
-        translated = translator.translate(text)
-        return translated
-    except Exception as e:
-        print(f"[TRANSLATE ERROR]: {e} - Mantendo texto original.")
-        return text  # Fallback para PT se falhar
-
-def get_article_text(url, session, use_selenium=False):
-    if use_selenium:
-        full_text = extract_with_selenium(url)
-    else:
-        headers = {'User -Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
-        try:
-            response = session.get(url, headers=headers, timeout=20)
-            response.raise_for_status()
-            soup = BeautifulSoup(response.content, 'html.parser')
-            for script in soup(["script", "style", "nav", "footer"]):
-                script.decompose()
-            full_text = soup.get_text().strip()
-            if len(full_text) < 50:
-                return "Short summary available in the link."
-            lines = (line.strip() for line in full_text.splitlines())
-            chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
-            full_text = ' '.join(chunk for chunk in chunks if chunk)
-            full_text = full_text[:2000]
-        except Exception as e:
-            print(f"[TEXT ERROR] {url}: {e}")
-            full_text = "Summary not available."
-    return full_text
+        print(f"[TEXT ERROR] {url}: {e}")
+        return "Erro ao extrair conteúdo."
 
 def fetch_rss():
+    """Coleta notícias de feeds RSS"""
     articles = []
     session = create_session_with_retries()
+    
     for url in RSS_FEEDS:
         try:
-            print(f"[RSS] Processando {url}...")
+            print(f"[RSS] Processando {url}")
             feed = feedparser.parse(url)
-            added = 0
-            for entry in feed.entries[:20]:
-                title_lower = entry.title.lower()
-                if any(kw in title_lower for kw in GENERIC_MARITIME_KEYWORDS):
-                    summary_pt = entry.get('summary', '') or entry.get('description', '') or f"Leia mais sobre {entry.title}."
-                    # Traduz título e summary
-                    title_en = translate_to_english(entry.title)
-                    summary_en = translate_to_english(summary_pt)
-                    # Resumiza em EN se longo
-                    if len(summary_en) > 200:
-                        summary_en = summarize_text(summary_en, sentences_count=2)
-                    # Pós-processa para menos ambiguidade: Adiciona contexto chave se vago
-                    if len(summary_en.split()) < 20:  # Se muito curto/ambíguo
-                        summary_en += f" Related to {title_en} in Brazilian ports."
-                    articles.append({
-                        'title': title_en,  # Título em EN
-                        'link': entry.link,
-                        'summary': summary_en[:300],
-                        'source': urlparse(url).netloc
-                    })
-                    added += 1
-            print(f"[RSS] {len(feed.entries) if 'entries' in feed else 0} itens, {added} coletados em {url}.")
+            
+            if hasattr(feed, 'entries'):
+                for entry in feed.entries[:15]:  # Limita a 15 por feed
+                    title = entry.get('title', 'Sem título')
+                    link = entry.get('link', '')
+                    summary = entry.get('summary', entry.get('description', ''))
+                    
+                    # Filtro por keywords em português
+                    combined_text = (title + " " + summary).lower()
+                    
+                    if any(keyword in combined_text for keyword in GENERIC_MARITIME_KEYWORDS):
+                        # Limpa e formata
+                        title = clean_text(title)
+                        summary = clean_text(summary)
+                        
+                        # Resumiza se necessário
+                        if len(summary) > 200:
+                            summary = summarize_text(summary, sentences_count=2)
+                        
+                        articles.append({
+                            'title': title,
+                            'link': link,
+                            'summary': summary[:500],
+                            'source': urlparse(url).netloc,
+                            'type': 'rss'
+                        })
+                        
+                print(f"[RSS] ✅ {len(feed.entries)} entradas processadas de {url}")
+                
         except Exception as e:
             print(f"[RSS ERROR] {url}: {e}")
-    print(f"✅ Total RSS: {len(articles)}")
+            continue
+    
+    print(f"✅ Total RSS coletado: {len(articles)}")
     return articles
 
 def fetch_scrape():
+    """Coleta notícias via scraping direto"""
     articles = []
     session = create_session_with_retries()
+    
     for site in SCRAPE_SITES:
         try:
-            print(f"[SCRAPE] Processando {site}...")
-            response = session.get(site, timeout=30)
+            print(f"[SCRAPE] Processando {site}")
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }
+            response = session.get(site, headers=headers, timeout=20)
             response.raise_for_status()
+            
             soup = BeautifulSoup(response.content, 'html.parser')
             
-            news_items = []
+            # Seletores para diferentes sites
             if "portosenavios" in site:
-                news_items = soup.select('.entry-title a, .post a, h2 a')
-            elif "gov.br" in site:
-                news_items = soup.select('a[href*="/noticias/"], h3 a, .noticia a')
+                links = soup.select('.entry-title a, h2 a, .post-title a')
+            elif "antaq" in site or "gov.br" in site:
+                links = soup.select('a[href*="noticias"], .noticia-titulo a, h3 a')
             else:
-                news_items = soup.select('.post a, .news a, h2 a')
+                links = soup.select('a[href*="noticia"], .news-item a, h2 a')
             
-            added = 0
-            for item in news_items[:30]:
-                href = item.get('href', '')
-                if not href or 'javascript:' in href: continue
-                if not href.startswith('http'):
-                    href = site.rstrip('/') + '/' + href.lstrip('/')
-                title_pt = item.get_text(strip=True)
-                if not title_pt: continue
-                title_lower = title_pt.lower()
-                if any(kw in title_lower for kw in GENERIC_MARITIME_KEYWORDS):
-                    use_selenium = "gov.br" in href
-                    full_text_pt = get_article_text(href, session, use_selenium=use_selenium)
+            for link in links[:10]:  # Limita a 10 por site
+                try:
+                    href = link.get('href', '')
+                    title = link.get_text(strip=True)
                     
-                    # Traduz full_text para EN
-                    full_text_en = translate_to_english(full_text_pt)
-                    # Resumiza em EN
-                    summary_en = summarize_text(full_text_en, sentences_count=3) if len(full_text_en) > 100 else full_text_en
-                    # Pós-processa: Se ambíguo (curto/genérico), adiciona termos chave traduzidos
-                    key_terms = ["lease", "terminal", "safety", "port", "regulation", "risk"]  # EN equivalents
-                    if len(summary_en.split()) < 25 or "agency" in summary_en.lower() and "details" not in summary_en.lower():
-                        summary_en += f" Key aspects: {', '.join([t for t in key_terms if any(term in full_text_en.lower() for term in [t.lower(), translate_to_english(t).lower()])][:3])}."
-                    summary_en = summary_en[:400]
+                    if not href or not title:
+                        continue
                     
-                    # Traduz título
-                    title_en = translate_to_english(title_pt)
+                    # Constrói URL completa se for relativa
+                    if not href.startswith('http'):
+                        if href.startswith('/'):
+                            href = urlparse(site).scheme + "://" + urlparse(site).netloc + href
+                        else:
+                            href = site.rstrip('/') + '/' + href.lstrip('/')
                     
-                    articles.append({
-                        'title': title_en,
-                        'link': href,
-                        'summary': summary_en,
-                        'source': urlparse(site).netloc
-                    })
-                    added += 1
-                    time.sleep(3 if use_selenium else 1)
-            print(f"[SCRAPE] {len(news_items)} itens, {added} coletados em {site}.")
+                    # Verifica relevância
+                    if any(keyword in title.lower() for keyword in GENERIC_MARITIME_KEYWORDS):
+                        # Extrai conteúdo
+                        content = get_article_text(href, session)
+                        
+                        # Cria resumo
+                        if len(content) > 100 and content != "Conteúdo não disponível para resumo.":
+                            summary = summarize_text(content, sentences_count=2)
+                        else:
+                            summary = content
+                        
+                        articles.append({
+                            'title': clean_text(title),
+                            'link': href,
+                            'summary': summary[:500],
+                            'source': urlparse(site).netloc,
+                            'type': 'scrape'
+                        })
+                        
+                        time.sleep(1)  # Delay entre requisições
+                        
+                except Exception as e:
+                    print(f"[SCRAPE ITEM ERROR] {href}: {e}")
+                    continue
+                    
+            print(f"[SCRAPE] ✅ {len(links)} links processados de {site}")
+            
         except Exception as e:
             print(f"[SCRAPE ERROR] {site}: {e}")
-    print(f"✅ Total SCRAPE: {len(articles)}")
+            continue
+    
+    print(f"✅ Total SCRAPE coletado: {len(articles)}")
     return articles
