@@ -16,31 +16,31 @@ class NewsProcessorCompleto:
         self.feedback_file = "feedback.csv"
         self.data_file = "database/news_database.json"
         
-        # Keywords ajustadas para português
+        # KEYWORDS ESPECÍFICAS BRAZMAR MARINE SERVICES
         self.KEYWORDS = [
             # Seguros marítimos e riscos
             "seguro marítimo", "sinistro naval", "avaria", "indenização marítima",
-            "risco marítimo", "seguradora marítima", "apólice marítima",
-        
+            "risco marítimo", "seguradora marítima", "apólice marítima", "seguro de carga",
+            
             # Portos brasileiros específicos
             "porto de Itaqui", "porto do Pecém", "porto de Suape", "porto de Santos",
-            "porto de Paranaguá", "porto de Rio Grande", "porto de São Luís",
-        
+            "porto de Paranaguá", "porto de Rio Grande", "porto de São Luís", "porto de Fortaleza",
+            
             # Regulamentação e órgãos
-            "ANTAQ", "Marinha do Brasil", "DPC", "Capitania dos Portos",
+            "ANTAQ", "Marinha do Brasil", "DPC", "Capitania dos Portos", "Marinha",
             "regulamentação portuária", "normativa portuária", "legislação marítima",
-        
+            
             # Operações portuárias
             "cabotagem", "navegação interior", "hidrovia", "transporte aquaviário",
-            "terminal portuário", "movimentação portuária", "operações portuárias",
-        
+            "terminal portuário", "movimentação portuária", "operações portuárias", "carga marítima",
+            
             # Regiões de atuação
             "Maranhão", "Ceará", "Amapá", "Pará", "Nordeste", "Norte",
             "São Luís", "Fortaleza", "Macapá", "Belém",
-        
+            
             # Acidentes e incidentes
             "acidente naval", "naufrágio", "colisão naval", "incidente portuário",
-            "acidente portuário", "avaria em navio"
+            "acidente portuário", "avaria em navio", "navio", "porto", "marítimo"
         ]
         
         self.NEGATIVE_KEYWORDS = [
@@ -131,8 +131,11 @@ class NewsProcessorCompleto:
         for i, artigo in enumerate(artigos):
             print(f"🔍 Analisando {i+1}/{len(artigos)}: {artigo['title'][:50]}...")
             
+            # Debug do filtro
+            score = self.debug_filtro(artigo)
+            
             # Filtro automático
-            relevante_auto = self.filtro_automatico(artigo)
+            relevante_auto = score >= 1
             if not relevante_auto:
                 print("   ❌ Rejeitado pelo filtro automático")
                 continue
@@ -170,17 +173,22 @@ class NewsProcessorCompleto:
         
         return artigos_relevantes
     
-    def filtro_automatico(self, artigo):
-        """Filtro automático por keywords"""
+    def debug_filtro(self, artigo):
+        """Debug detalhado do filtro"""
         combined_text = (artigo['title'] + " " + artigo['summary']).lower()
-        score = sum(1 for kw in self.KEYWORDS if kw.lower() in combined_text)
         
-        # Penaliza por negative keywords
-        negative_score = sum(1 for nkw in self.NEGATIVE_KEYWORDS if nkw.lower() in combined_text)
-        score -= negative_score * 2
+        keywords_encontradas = [kw for kw in self.KEYWORDS if kw.lower() in combined_text]
+        negative_encontradas = [nkw for nkw in self.NEGATIVE_KEYWORDS if nkw.lower() in combined_text]
         
-        print(f"   🔧 Score automático: {score}")
-        return score >= 2  # Reduzido o threshold para capturar mais notícias
+        score = len(keywords_encontradas) - len(negative_encontradas)*2
+        
+        print(f"   🔍 DEBUG FILTRO:")
+        print(f"   📰 Título: {artigo['title'][:60]}...")
+        print(f"   ✅ Keywords: {keywords_encontradas}")
+        print(f"   ❌ Negative: {negative_encontradas}")
+        print(f"   📊 Score: {score}")
+        
+        return score
     
     def filtrar_por_ml(self, artigo):
         """Filtro por Machine Learning"""
@@ -201,10 +209,10 @@ class NewsProcessorCompleto:
             return True
     
     def filtrar_por_gemini(self, artigo):
-        """Filtro por Gemini AI"""
+        """Filtro ESPECÍFICO para BRAZMAR MARINE SERVICES"""
         try:
             prompt = f"""
-            ANALISAR para BRAZMAR MARINE SERVICES (seguros marítimos, consultoria portuária):
+            ANALISAR para BRAZMAR MARINE SERVICES (seguros marítimos, consultoria portuária no Brasil):
 
             TÍTULO: {artigo['title']}
             RESUMO: {artigo['summary']}
@@ -222,6 +230,8 @@ class NewsProcessorCompleto:
             ❌ Notícias internacionais
             ❌ Entretenimento, cultura, eventos
             ❌ Assuntos gerais sem ligação direta com operações marítimas
+
+            Esta notícia é RELEVANTE para seguros marítimos ou operações portuárias da BRAZMAR?
 
             Responda APENAS com JSON:
             {{
@@ -247,7 +257,7 @@ class NewsProcessorCompleto:
                 
         except Exception as e:
             print(f"   ❌ Erro Gemini: {e}")
-            return True
+            return False
     
     def parse_resposta_gemini(self, response_text):
         """Parse da resposta do Gemini"""

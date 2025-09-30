@@ -3,8 +3,11 @@ import json
 import csv
 from datetime import datetime
 from flask import Flask, render_template, jsonify, request
+import schedule
 from flask_cors import CORS
-
+import threading
+import time
+    
 app = Flask(__name__)
 app.config['JSON_AS_ASCII'] = False
 CORS(app)
@@ -80,8 +83,104 @@ class BrazmarDashboard:
             "total_geral": stats.get('total_articles', 0)
         }
 
-# Instância global do dashboard
+class BrazmarScheduler:
+    def __init__(self):
+        self.running = True
+        
+    def executar_coleta_imediata(self):
+        """Executa coleta IMEDIATA ao iniciar"""
+        print(f"\n🎯 EXECUTANDO COLETA IMEDIATA - {datetime.now()}")
+        try:
+            from news_processor import NewsProcessorCompleto
+            processor = NewsProcessorCompleto()
+            artigos = processor.executar_coleta_completa()
+            print(f"✅ Coleta imediata concluída: {len(artigos)} notícias")
+            return artigos
+        except Exception as e:
+            print(f"❌ Erro na coleta imediata: {e}")
+            return []
+    
+    def agendar_tarefas(self):
+        """Agenda todas as tarefas automáticas"""
+        
+        # 🎯 COLETA IMEDIATA ao iniciar
+        self.executar_coleta_imediata()
+        
+        # 🕘 09:00 - Análise completa do dia
+        schedule.every().day.at("09:00").do(self.tarefa_analise_completa)
+        
+        # 🕛 12:00 - Atualização do meio-dia
+        schedule.every().day.at("12:00").do(self.tarefa_atualizacao_rapida)
+        
+        # 🕒 15:00 - Atualização da tarde
+        schedule.every().day.at("15:00").do(self.tarefa_atualizacao_rapida)
+        
+        # 🕔 17:00 - Resumo executivo
+        schedule.every().day.at("17:00").do(self.tarefa_resumo_executivo)
+        
+        print("⏰ AGENDADOR CONFIGURADO:")
+        print("   🎯 COLETA IMEDIATA (ao iniciar)")
+        print("   🕘 09:00 - Análise completa")
+        print("   🕛 12:00 - Atualização rápida")
+        print("   🕒 15:00 - Atualização rápida") 
+        print("   🕔 17:00 - Resumo executivo")
+    
+    def tarefa_analise_completa(self):
+        """Tarefa das 09:00 - Análise completa"""
+        print(f"\n🎯 EXECUTANDO ANÁLISE COMPLETA - {datetime.now()}")
+        try:
+            from news_processor import NewsProcessorCompleto
+            processor = NewsProcessorCompleto()
+            artigos = processor.executar_coleta_completa()
+            print(f"✅ Análise completa: {len(artigos)} notícias")
+        except Exception as e:
+            print(f"❌ Erro na análise: {e}")
+    
+    def tarefa_atualizacao_rapida(self):
+        """Tarefas rápidas de atualização"""
+        print(f"\n⚡ ATUALIZAÇÃO RÁPIDA - {datetime.now()}")
+        try:
+            from news_processor import NewsProcessorCompleto
+            processor = NewsProcessorCompleto()
+            artigos = processor.executar_coleta_completa()
+            print(f"✅ Atualização rápida: {len(artigos)} notícias")
+        except Exception as e:
+            print(f"❌ Erro na atualização: {e}")
+    
+    def tarefa_resumo_executivo(self):
+        """Tarefa das 17:00 - Resumo do dia"""
+        print(f"\n📊 RESUMO EXECUTIVO - {datetime.now()}")
+        try:
+            # Usa o dashboard para pegar estatísticas
+            data = dashboard.get_dashboard_data()
+            altas = data.get('alta_prioridade', 0)
+            total = data.get('total_artigos', 0)
+            print(f"📈 RESUMO: {total} notícias totais, {altas} de alta urgência")
+        except Exception as e:
+            print(f"❌ Erro no resumo: {e}")
+    
+    def iniciar(self):
+        """Inicia o agendador em thread separada"""
+        import schedule
+        
+        def rodar_agendador():
+            self.agendar_tarefas()
+            while self.running:
+                schedule.run_pending()
+                time.sleep(60)  # Verifica a cada minuto
+        
+        thread = threading.Thread(target=rodar_agendador, daemon=True)
+        thread.start()
+        print("🚀 Agendador iniciado em background")
+    
+    def parar(self):
+        """Para o agendador"""
+        self.running = False
+        print("🛑 Agendador parado")
+
+# Instâncias globais
 dashboard = BrazmarDashboard()
+scheduler = BrazmarScheduler()
 
 # ROTAS DA APLICAÇÃO
 @app.route('/')
@@ -176,19 +275,20 @@ def health_check():
 
 def iniciar_sistema():
     """Inicia todo o sistema"""
-    print("=" * 50)
-    print("🚀 BRAZMAR NEWS BOT - INICIANDO")
-    print("=" * 50)
-    print(f"🔑 Gemini: {'✅' if os.getenv('GEMINI_API_KEY') else '❌'}")
+    print("=" * 60)
+    print("🚀 BRAZMAR NEWS BOT - INICIANDO SISTEMA COMPLETO")
+    print("=" * 60)
+    print(f"🔑 Gemini: {'✅ CONFIGURADO' if os.getenv('GEMINI_API_KEY') else '❌ NÃO CONFIGURADO'}")
     print(f"🌐 Porta: {PORT}")
     
-    # Inicia agendador
+    # Inicia agendador IMEDIATAMENTE
     try:
-        from scheduler import scheduler
         scheduler.iniciar()
-        print("✅ Agendador iniciado")
+        print("✅ Agendador iniciado com COLETA IMEDIATA")
     except Exception as e:
-        print(f"⚠️  Erro no agendador: {e}")
+        print(f"❌ ERRO no agendador: {e}")
+        import traceback
+        traceback.print_exc()
 
 if __name__ == '__main__':
     iniciar_sistema()
