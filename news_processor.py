@@ -18,16 +18,36 @@ class NewsProcessorCompleto:
         
         # Keywords ajustadas para português
         self.KEYWORDS = [
-            "Brasil", "brasileiro", "portos brasileiros", "São Luís", "Fortaleza", 
-            "Macapá", "Belém", "Maranhão", "Ceará", "Amapá", "Pará", "Norte", "Nordeste",
-            "ANTAQ", "Marinha do Brasil", "Ministério dos Transportes", "porto de Itaqui",
-            "porto do Pecém", "porto de Suape", "navio brasileiro", "carga marítima",
-            "seguro marítimo", "sinistro naval", "regulamentação portuária", "despacho aduaneiro",
-            "taxa portuária", "alfândega", "cabotagem", "offshore", "hidrovia",
-            "porto", "navio", "marítimo", "shipping", "carga", "terminal", "logística"
+            # Seguros marítimos e riscos
+            "seguro marítimo", "sinistro naval", "avaria", "indenização marítima",
+            "risco marítimo", "seguradora marítima", "apólice marítima",
+        
+            # Portos brasileiros específicos
+            "porto de Itaqui", "porto do Pecém", "porto de Suape", "porto de Santos",
+            "porto de Paranaguá", "porto de Rio Grande", "porto de São Luís",
+        
+            # Regulamentação e órgãos
+            "ANTAQ", "Marinha do Brasil", "DPC", "Capitania dos Portos",
+            "regulamentação portuária", "normativa portuária", "legislação marítima",
+        
+            # Operações portuárias
+            "cabotagem", "navegação interior", "hidrovia", "transporte aquaviário",
+            "terminal portuário", "movimentação portuária", "operações portuárias",
+        
+            # Regiões de atuação
+            "Maranhão", "Ceará", "Amapá", "Pará", "Nordeste", "Norte",
+            "São Luís", "Fortaleza", "Macapá", "Belém",
+        
+            # Acidentes e incidentes
+            "acidente naval", "naufrágio", "colisão naval", "incidente portuário",
+            "acidente portuário", "avaria em navio"
         ]
         
-        self.NEGATIVE_KEYWORDS = ["global", "internacional", "EUA", "China", "Europa", "histórico", "antigo"]
+        self.NEGATIVE_KEYWORDS = [
+            "global", "internacional", "EUA", "China", "Europa", "Ásia",
+            "cruzeiro", "turismo", "pesca esportiva", "iate", "veleiro",
+            "histórico", "antigo", "cultural", "festival", "entretenimento"
+        ]
         
         self.setup_gemini()
         self.setup_ml_system()
@@ -189,14 +209,25 @@ class NewsProcessorCompleto:
             TÍTULO: {artigo['title']}
             RESUMO: {artigo['summary']}
 
-            Esta notícia é relevante para seguros marítimos ou operações portuárias no Brasil?
-            Foco em ANTAQ, portos brasileiros, regulamentação marítima, Maranhão, Ceará, Pará.
+            CRITÉRIOS ESTRITOS - A notícia deve ser sobre:
+            ✅ Seguros marítimos, sinistros navais, avarias
+            ✅ Portos brasileiros (Itaqui, Pecém, Suape, Santos, etc.)
+            ✅ ANTAQ, Marinha do Brasil, regulamentação portuária
+            ✅ Acidentes/incidentes em portos ou navios
+            ✅ Operações de cabotagem, navegação interior
+            ✅ Região Norte/Nordeste do Brasil
+
+            ❌ REJEITAR se for sobre:
+            ❌ Turismo, cruzeiros, pesca esportiva
+            ❌ Notícias internacionais
+            ❌ Entretenimento, cultura, eventos
+            ❌ Assuntos gerais sem ligação direta com operações marítimas
 
             Responda APENAS com JSON:
             {{
                 "relevante": true/false,
                 "confianca": 0-100,
-                "motivo": "explicação curta",
+                "motivo": "explicação específica",
                 "urgencia": "BAIXA/MEDIA/ALTA"
             }}
             """
