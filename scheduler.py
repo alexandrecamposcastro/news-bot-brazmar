@@ -2,11 +2,10 @@ import schedule
 import time
 import threading
 from datetime import datetime
-from news_processor import NewsProcessorCompleto
 
 class BrazmarScheduler:
     def __init__(self):
-        self.processor = NewsProcessorCompleto()
+        self.processor = None
         self.running = True
         
     def agendar_tarefas(self):
@@ -34,7 +33,9 @@ class BrazmarScheduler:
         """Tarefa das 09:00 - Análise completa"""
         print(f"\n🎯 EXECUTANDO ANÁLISE COMPLETA - {datetime.now()}")
         try:
-            artigos = self.processor.executar_coleta_completa()
+            from news_processor import NewsProcessorCompleto
+            processor = NewsProcessorCompleto()
+            artigos = processor.executar_coleta_completa()
             print(f"✅ Análise completa concluída: {len(artigos)} notícias")
         except Exception as e:
             print(f"❌ Erro na análise: {e}")
@@ -43,7 +44,9 @@ class BrazmarScheduler:
         """Tarefas rápidas de atualização"""
         print(f"\n⚡ ATUALIZAÇÃO RÁPIDA - {datetime.now()}")
         try:
-            artigos = self.processor.executar_coleta_completa()
+            from news_processor import NewsProcessorCompleto
+            processor = NewsProcessorCompleto()
+            artigos = processor.executar_coleta_completa()
             print(f"✅ Atualização rápida concluída: {len(artigos)} notícias")
         except Exception as e:
             print(f"❌ Erro na atualização: {e}")
@@ -52,7 +55,9 @@ class BrazmarScheduler:
         """Tarefa das 17:00 - Resumo do dia"""
         print(f"\n📊 RESUMO EXECUTIVO - {datetime.now()}")
         try:
-            artigos = self.processor.executar_coleta_completa()
+            from news_processor import NewsProcessorCompleto
+            processor = NewsProcessorCompleto()
+            artigos = processor.executar_coleta_completa()
             
             # Gera relatório resumido
             altas = len([a for a in artigos if a.get('urgencia') == 'ALTA'])
@@ -81,3 +86,13 @@ class BrazmarScheduler:
 
 # Instância global para importação
 scheduler = BrazmarScheduler()
+
+# Opcional: Execução direta para testes
+if __name__ == '__main__':
+    print("🔧 Executando scheduler em modo standalone...")
+    scheduler.iniciar()
+    try:
+        while True:
+            time.sleep(60)
+    except KeyboardInterrupt:
+        scheduler.parar()
