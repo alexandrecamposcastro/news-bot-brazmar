@@ -55,10 +55,10 @@ class NewsProcessorCompleto:
     def setup_gemini(self):
         """Configura Gemini"""
         api_key = os.getenv("GEMINI_API_KEY")
-        if api_key and api_key != "sua_chave_gemini_aqui":
+        if api_key and api_key != "AIzaSyCamSIYRSrZ9JUHtnVNgLKdkQ42ySYAdNA":
             try:
                 genai.configure(api_key=api_key)
-                self.model_flash = genai.GenerativeModel('gemini-1.5-flash')
+                self.model_flash = genai.GenerativeModel('gemini-2.5-pro')
                 self.gemini_enabled = True
                 print("✅ Gemini Configurado")
             except Exception as e:
