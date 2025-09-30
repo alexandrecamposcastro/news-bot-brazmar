@@ -3,11 +3,11 @@ import json
 import csv
 from datetime import datetime
 from flask import Flask, render_template, jsonify, request
-import schedule
 from flask_cors import CORS
 import threading
 import time
-    
+import schedule
+
 app = Flask(__name__)
 app.config['JSON_AS_ASCII'] = False
 CORS(app)
@@ -98,6 +98,8 @@ class BrazmarScheduler:
             return artigos
         except Exception as e:
             print(f"❌ Erro na coleta imediata: {e}")
+            import traceback
+            traceback.print_exc()
             return []
     
     def agendar_tarefas(self):
@@ -161,8 +163,6 @@ class BrazmarScheduler:
     
     def iniciar(self):
         """Inicia o agendador em thread separada"""
-        import schedule
-        
         def rodar_agendador():
             self.agendar_tarefas()
             while self.running:
@@ -273,23 +273,21 @@ def health_check():
         "timestamp": datetime.now().isoformat()
     })
 
-def iniciar_sistema():
-    """Inicia todo o sistema"""
-    print("=" * 60)
-    print("🚀 BRAZMAR NEWS BOT - INICIANDO SISTEMA COMPLETO")
-    print("=" * 60)
-    print(f"🔑 Gemini: {'✅ CONFIGURADO' if os.getenv('GEMINI_API_KEY') else '❌ NÃO CONFIGURADO'}")
-    print(f"🌐 Porta: {PORT}")
-    
-    # Inicia agendador IMEDIATAMENTE
-    try:
-        scheduler.iniciar()
-        print("✅ Agendador iniciado com COLETA IMEDIATA")
-    except Exception as e:
-        print(f"❌ ERRO no agendador: {e}")
-        import traceback
-        traceback.print_exc()
+# INICIALIZAÇÃO DO SISTEMA - EXECUTADA SEMPRE
+print("=" * 60)
+print("🚀 BRAZMAR NEWS BOT - INICIANDO SISTEMA COMPLETO")
+print("=" * 60)
+print(f"🔑 Gemini: {'✅ CONFIGURADO' if os.getenv('GEMINI_API_KEY') else '❌ NÃO CONFIGURADO'}")
+print(f"🌐 Porta: {PORT}")
+
+# Inicia agendador IMEDIATAMENTE (sempre executa)
+try:
+    scheduler.iniciar()
+    print("✅ Agendador iniciado com COLETA IMEDIATA")
+except Exception as e:
+    print(f"❌ ERRO no agendador: {e}")
+    import traceback
+    traceback.print_exc()
 
 if __name__ == '__main__':
-    iniciar_sistema()
     app.run(host='0.0.0.0', port=PORT, debug=False)
