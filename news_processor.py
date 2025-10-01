@@ -68,7 +68,7 @@ class NewsProcessorCompleto:
             
             # Tenta o modelo que você quer usar - Gemini 2.5 Pro
             try:
-                self.model = genai.GenerativeModel('gemini-2.5-pro')
+                self.model = genai.GenerativeModel('gemini-2.0-flash')
                 print("✅ Gemini 2.5 Pro configurado com sucesso")
                 self.gemini_enabled = True
                 return
