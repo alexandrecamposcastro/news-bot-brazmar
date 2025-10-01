@@ -8,6 +8,7 @@ import os
 import json
 import re
 from datetime import datetime
+import time
 
 class NewsProcessorCompleto:
     def __init__(self):
@@ -53,20 +54,38 @@ class NewsProcessorCompleto:
         self.setup_ml_system()
     
     def setup_gemini(self):
-        """Configura Gemini"""
+        """Configura Gemini com tratamento de erro robusto"""
         api_key = os.getenv("GEMINI_API_KEY")
-        if api_key and api_key != "AIzaSyCamSIYRSrZ9JUHtnVNgLKdkQ42ySYAdNA":
-            try:
-                genai.configure(api_key=api_key)
-                self.model_flash = genai.GenerativeModel('gemini-2.5-pro')
-                self.gemini_enabled = True
-                print("✅ Gemini Configurado")
-            except Exception as e:
-                print(f"❌ Erro configurando Gemini: {e}")
-                self.gemini_enabled = False
-        else:
+        
+        if not api_key:
+            print("❌ GEMINI_API_KEY não encontrada nas variáveis de ambiente")
             self.gemini_enabled = False
-            print("⚠️ Gemini não configurado - usando apenas filtros básicos")
+            return
+
+        try:
+            print("🔑 Configurando Gemini...")
+            genai.configure(api_key=api_key)
+            
+            # Tenta o modelo que você quer usar - Gemini 2.5 Pro
+            try:
+                self.model = genai.GenerativeModel('gemini-2.5-pro')
+                print("✅ Gemini 2.5 Pro configurado com sucesso")
+                self.gemini_enabled = True
+                return
+            except Exception as model_error:
+                print(f"❌ Erro com Gemini 2.5 Pro: {model_error}")
+                # Fallback para outros modelos
+                try:
+                    self.model = genai.GenerativeModel('gemini-1.5-flash')
+                    print("✅ Fallback para Gemini 1.5 Flash")
+                    self.gemini_enabled = True
+                except Exception as fallback_error:
+                    print(f"❌ Fallback também falhou: {fallback_error}")
+                    self.gemini_enabled = False
+                    
+        except Exception as e:
+            print(f"❌ Erro crítico na configuração do Gemini: {e}")
+            self.gemini_enabled = False
     
     def setup_ml_system(self):
         """Sistema de ML"""
@@ -210,6 +229,10 @@ class NewsProcessorCompleto:
     
     def filtrar_por_gemini(self, artigo):
         """Filtro ESPECÍFICO para BRAZMAR MARINE SERVICES"""
+        if not self.gemini_enabled or not hasattr(self, 'model'):
+            print("   ⚠️ Gemini não disponível para análise")
+            return True  # Permite que o artigo passe se Gemini não estiver disponível
+        
         try:
             prompt = f"""
             ANALISAR para BRAZMAR MARINE SERVICES (seguros marítimos, consultoria portuária no Brasil):
@@ -242,7 +265,27 @@ class NewsProcessorCompleto:
             }}
             """
             
-            response = self.model_flash.generate_content(prompt)
+            # Configuração de segurança
+            generation_config = {
+                "temperature": 0.1,
+                "top_p": 0.8,
+                "top_k": 40,
+                "max_output_tokens": 500,
+            }
+            
+            safety_settings = [
+                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
+            ]
+            
+            response = self.model.generate_content(
+                prompt,
+                generation_config=generation_config,
+                safety_settings=safety_settings
+            )
+            
             analysis = self.parse_resposta_gemini(response.text)
             
             if analysis.get('relevante', False):
@@ -256,8 +299,9 @@ class NewsProcessorCompleto:
                 return False
                 
         except Exception as e:
-            print(f"   ❌ Erro Gemini: {e}")
-            return False
+            print(f"   ❌ Erro Gemini na análise: {e}")
+            # Em caso de erro, permite que o artigo passe
+            return True
     
     def parse_resposta_gemini(self, response_text):
         """Parse da resposta do Gemini"""
