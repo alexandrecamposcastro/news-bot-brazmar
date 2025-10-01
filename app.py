@@ -281,13 +281,17 @@ print(f"🔑 Gemini: {'✅ CONFIGURADO' if os.getenv('GEMINI_API_KEY') else '❌
 print(f"🌐 Porta: {PORT}")
 
 # Inicia agendador IMEDIATAMENTE (sempre executa)
-try:
-    scheduler.iniciar()
-    print("✅ Agendador iniciado com COLETA IMEDIATA")
-except Exception as e:
-    print(f"❌ ERRO no agendador: {e}")
-    import traceback
-    traceback.print_exc()
-
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=PORT, debug=False)
+    # Inicia agendador em thread separada
+    def iniciar_agendador():
+        try:
+            scheduler.iniciar()
+        except Exception as e:
+            print(f"❌ Erro no agendador: {e}")
+    
+    import threading
+    scheduler_thread = threading.Thread(target=iniciar_agendador, daemon=True)
+    scheduler_thread.start()
+    
+    # Inicia servidor web
+    app.run(host='0.0.0.0', port=PORT, debug=False, use_reloader=False)
