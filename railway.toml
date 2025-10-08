@@ -1,0 +1,10 @@
+[build]
+builder = "nixpacks"
+
+[deploy]
+startCommand = "python app.py"
+
+[[services]]
+name = "web"
+[[services.ports]]
+port = 10000

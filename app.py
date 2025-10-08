@@ -12,8 +12,8 @@ app = Flask(__name__)
 app.config['JSON_AS_ASCII'] = False
 CORS(app)
 
-# Configuração de porta para produção
-PORT = int(os.environ.get('PORT', 5000))
+# Configuração de porta para Railway
+PORT = int(os.environ.get('PORT', 10000))
 
 # Carregar variáveis de ambiente
 try:
@@ -23,14 +23,16 @@ try:
 except Exception as e:
     print(f"⚠️  Aviso dotenv: {e}")
 
+# Importar database PostgreSQL
+from database_pg import db
+
 class BrazmarDashboard:
     def __init__(self):
         self.data_file = "database/news_database.json"
-        self.feedback_file = "feedback.csv"
         self.ensure_database()
     
     def ensure_database(self):
-        """Garante que os arquivos de database existem"""
+        """Garante que os arquivos necessários existem"""
         try:
             os.makedirs("database", exist_ok=True)
             
@@ -44,44 +46,68 @@ class BrazmarDashboard:
                             "today_articles": 0
                         }
                     }, f, indent=2, ensure_ascii=False)
-            
-            if not os.path.exists(self.feedback_file):
-                with open(self.feedback_file, 'w', newline='', encoding='utf-8') as f:
-                    writer = csv.writer(f)
-                    writer.writerow(["title", "summary", "relevant"])
                     
             print("✅ Database inicializado")
         except Exception as e:
             print(f"❌ Erro inicializando database: {e}")
     
     def get_dashboard_data(self):
-        """Obtém dados para o dashboard"""
+        """Obtém dados para o dashboard - Agora com PostgreSQL"""
         try:
-            with open(self.data_file, 'r', encoding='utf-8') as f:
-                data = json.load(f)
+            # Tenta pegar artigos do PostgreSQL primeiro
+            artigos_recentes = db.get_recent_articles(50)
+            
+            if artigos_recentes:
+                # Usa artigos do PostgreSQL
+                hoje = datetime.now().strftime("%Y-%m-%d")
+                artigos_hoje = [
+                    artigo for artigo in artigos_recentes
+                    if artigo.get('created_at', '').startswith(hoje)
+                ]
+                
+                return {
+                    "artigos_hoje": artigos_hoje,
+                    "total_artigos": len(artigos_hoje),
+                    "alta_prioridade": len([a for a in artigos_hoje if a.get('urgencia') == 'ALTA']),
+                    "media_prioridade": len([a for a in artigos_hoje if a.get('urgencia') == 'MEDIA']),
+                    "baixa_prioridade": len([a for a in artigos_hoje if a.get('urgencia') == 'BAIXA']),
+                    "ultima_atualizacao": datetime.now().isoformat(),
+                    "total_geral": len(artigos_recentes)
+                }
+            else:
+                # Fallback para JSON local
+                with open(self.data_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                
+                hoje = datetime.now().strftime("%Y-%m-%d")
+                artigos_hoje = [
+                    artigo for artigo in data.get("articles", [])
+                    if artigo.get("collection_date", "").startswith(hoje)
+                ]
+                
+                stats = data.get("stats", {})
+                
+                return {
+                    "artigos_hoje": artigos_hoje,
+                    "total_artigos": len(artigos_hoje),
+                    "alta_prioridade": len([a for a in artigos_hoje if a.get('urgencia') == 'ALTA']),
+                    "media_prioridade": len([a for a in artigos_hoje if a.get('urgencia') == 'MEDIA']),
+                    "baixa_prioridade": len([a for a in artigos_hoje if a.get('urgencia') == 'BAIXA']),
+                    "ultima_atualizacao": stats.get('last_updated', 'Nunca'),
+                    "total_geral": stats.get('total_articles', 0)
+                }
+                
         except (FileNotFoundError, json.JSONDecodeError) as e:
             print(f"⚠️  Erro carregando database: {e}")
-            data = {"articles": [], "stats": {}}
-        
-        # Artigos de hoje
-        hoje = datetime.now().strftime("%Y-%m-%d")
-        artigos_hoje = [
-            artigo for artigo in data.get("articles", [])
-            if artigo.get("collection_date", "").startswith(hoje)
-        ]
-        
-        # Estatísticas
-        stats = data.get("stats", {})
-        
-        return {
-            "artigos_hoje": artigos_hoje,
-            "total_artigos": len(artigos_hoje),
-            "alta_prioridade": len([a for a in artigos_hoje if a.get('urgencia') == 'ALTA']),
-            "media_prioridade": len([a for a in artigos_hoje if a.get('urgencia') == 'MEDIA']),
-            "baixa_prioridade": len([a for a in artigos_hoje if a.get('urgencia') == 'BAIXA']),
-            "ultima_atualizacao": stats.get('last_updated', 'Nunca'),
-            "total_geral": stats.get('total_articles', 0)
-        }
+            return {
+                "artigos_hoje": [], 
+                "total_artigos": 0,
+                "alta_prioridade": 0,
+                "media_prioridade": 0,
+                "baixa_prioridade": 0,
+                "ultima_atualizacao": "Nunca",
+                "total_geral": 0
+            }
 
 class BrazmarScheduler:
     def __init__(self):
@@ -220,7 +246,7 @@ def api_atualizar():
 
 @app.route('/api/feedback', methods=['POST'])
 def receber_feedback():
-    """Sistema de feedback"""
+    """Sistema de feedback com PostgreSQL"""
     try:
         data = request.json
         title = data.get('title', '')
@@ -229,11 +255,13 @@ def receber_feedback():
         
         print(f"📝 Feedback: {title[:50]}... - Relevante: {relevant}")
         
-        with open('feedback.csv', 'a', newline='', encoding='utf-8') as f:
-            writer = csv.writer(f)
-            writer.writerow([title, summary, relevant])
+        # Salva no PostgreSQL
+        success = db.save_feedback(title, summary, relevant)
         
-        return jsonify({'status': 'success', 'message': 'Feedback salvo'})
+        if success:
+            return jsonify({'status': 'success', 'message': 'Feedback salvo no banco'})
+        else:
+            return jsonify({'status': 'error', 'message': 'Erro ao salvar feedback'}), 500
         
     except Exception as e:
         print(f"❌ Erro no feedback: {e}")
@@ -241,57 +269,60 @@ def receber_feedback():
 
 @app.route('/api/estatisticas')
 def api_estatisticas():
-    """Estatísticas do sistema"""
+    """Estatísticas do sistema com PostgreSQL"""
     try:
-        feedback_stats = {"total": 0, "relevantes": 0, "irrelevantes": 0}
-        if os.path.exists('feedback.csv'):
-            with open('feedback.csv', 'r', encoding='utf-8') as f:
-                reader = csv.DictReader(f)
-                for row in reader:
-                    feedback_stats["total"] += 1
-                    if row.get('relevant', '').lower() == 'true':
-                        feedback_stats["relevantes"] += 1
-                    else:
-                        feedback_stats["irrelevantes"] += 1
+        feedback_stats = db.get_feedback_stats()
         
+        # Verifica se modelo ML existe
         model_exists = os.path.exists("relevance_model.pkl")
         
         return jsonify({
             "feedback": feedback_stats,
             "modelo_treinado": model_exists,
-            "gemini_habilitado": bool(os.getenv("GEMINI_API_KEY"))
+            "gemini_habilitado": bool(os.getenv("GEMINI_API_KEY")),
+            "banco_dados": "✅ PostgreSQL",
+            "plataforma": "Railway"
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 @app.route('/health')
 def health_check():
-    """Health check para Render.com"""
-    return jsonify({
-        "status": "healthy", 
-        "service": "Brazmar News Bot",
-        "timestamp": datetime.now().isoformat()
-    })
+    """Health check para Railway"""
+    try:
+        # Testa conexão com PostgreSQL
+        stats = db.get_feedback_stats()
+        
+        return jsonify({
+            "status": "healthy", 
+            "service": "Brazmar News Bot",
+            "timestamp": datetime.now().isoformat(),
+            "database": "✅ PostgreSQL conectado",
+            "feedback_count": stats["total"]
+        })
+    except Exception as e:
+        return jsonify({
+            "status": "degraded",
+            "error": str(e)
+        }), 500
 
-# INICIALIZAÇÃO DO SISTEMA - EXECUTADA SEMPRE
+# INICIALIZAÇÃO DO SISTEMA
 print("=" * 60)
-print("🚀 BRAZMAR NEWS BOT - INICIANDO SISTEMA COMPLETO")
+print("🚀 BRAZMAR NEWS BOT - INICIANDO NO RAILWAY")
 print("=" * 60)
 print(f"🔑 Gemini: {'✅ CONFIGURADO' if os.getenv('GEMINI_API_KEY') else '❌ NÃO CONFIGURADO'}")
+print(f"🗄️  Database: PostgreSQL")
 print(f"🌐 Porta: {PORT}")
 
-# Inicia agendador IMEDIATAMENTE (sempre executa)
+# Inicia agendador IMEDIATAMENTE
+try:
+    scheduler.iniciar()
+    print("✅ Agendador iniciado com COLETA IMEDIATA")
+except Exception as e:
+    print(f"❌ ERRO no agendador: {e}")
+    import traceback
+    traceback.print_exc()
+
 if __name__ == '__main__':
-    # Inicia agendador em thread separada
-    def iniciar_agendador():
-        try:
-            scheduler.iniciar()
-        except Exception as e:
-            print(f"❌ Erro no agendador: {e}")
-    
-    import threading
-    scheduler_thread = threading.Thread(target=iniciar_agendador, daemon=True)
-    scheduler_thread.start()
-    
     # Inicia servidor web
-    app.run(host='0.0.0.0', port=PORT, debug=False, use_reloader=False)
+    app.run(host='0.0.0.0', port=PORT, debug=False)

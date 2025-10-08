@@ -10,11 +10,13 @@ import re
 from datetime import datetime
 import time
 
+# Importar database PostgreSQL
+from database_pg import db
+
 class NewsProcessorCompleto:
     def __init__(self):
         self.model_file = "relevance_model.pkl"
         self.vectorizer_file = "vectorizer.pkl" 
-        self.feedback_file = "feedback.csv"
         self.data_file = "database/news_database.json"
         
         # KEYWORDS ESPECÍFICAS BRAZMAR MARINE SERVICES
@@ -54,38 +56,20 @@ class NewsProcessorCompleto:
         self.setup_ml_system()
     
     def setup_gemini(self):
-        """Configura Gemini com tratamento de erro robusto"""
+        """Configura Gemini"""
         api_key = os.getenv("GEMINI_API_KEY")
-        
-        if not api_key:
-            print("❌ GEMINI_API_KEY não encontrada nas variáveis de ambiente")
-            self.gemini_enabled = False
-            return
-
-        try:
-            print("🔑 Configurando Gemini...")
-            genai.configure(api_key=api_key)
-            
-            # Tenta o modelo que você quer usar - Gemini 2.5 Pro
+        if api_key and api_key != "AIzaSyCamSIYRSrZ9JUHtnVNgLKdkQ42ySYAdNA":
             try:
-                self.model = genai.GenerativeModel('gemini-2.0-flash')
-                print("✅ Gemini 2.5 Pro configurado com sucesso")
+                genai.configure(api_key=api_key)
+                self.model = genai.GenerativeModel('gemini-1.5-flash')
                 self.gemini_enabled = True
-                return
-            except Exception as model_error:
-                print(f"❌ Erro com Gemini 2.5 Pro: {model_error}")
-                # Fallback para outros modelos
-                try:
-                    self.model = genai.GenerativeModel('gemini-1.5-flash')
-                    print("✅ Fallback para Gemini 1.5 Flash")
-                    self.gemini_enabled = True
-                except Exception as fallback_error:
-                    print(f"❌ Fallback também falhou: {fallback_error}")
-                    self.gemini_enabled = False
-                    
-        except Exception as e:
-            print(f"❌ Erro crítico na configuração do Gemini: {e}")
+                print("✅ Gemini Configurado")
+            except Exception as e:
+                print(f"❌ Erro configurando Gemini: {e}")
+                self.gemini_enabled = False
+        else:
             self.gemini_enabled = False
+            print("⚠️ Gemini não configurado - usando apenas filtros básicos")
     
     def setup_ml_system(self):
         """Sistema de ML"""
@@ -229,10 +213,6 @@ class NewsProcessorCompleto:
     
     def filtrar_por_gemini(self, artigo):
         """Filtro ESPECÍFICO para BRAZMAR MARINE SERVICES"""
-        if not self.gemini_enabled or not hasattr(self, 'model'):
-            print("   ⚠️ Gemini não disponível para análise")
-            return True  # Permite que o artigo passe se Gemini não estiver disponível
-        
         try:
             prompt = f"""
             ANALISAR para BRAZMAR MARINE SERVICES (seguros marítimos, consultoria portuária no Brasil):
@@ -265,27 +245,7 @@ class NewsProcessorCompleto:
             }}
             """
             
-            # Configuração de segurança
-            generation_config = {
-                "temperature": 0.1,
-                "top_p": 0.8,
-                "top_k": 40,
-                "max_output_tokens": 500,
-            }
-            
-            safety_settings = [
-                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
-            ]
-            
-            response = self.model.generate_content(
-                prompt,
-                generation_config=generation_config,
-                safety_settings=safety_settings
-            )
-            
+            response = self.model.generate_content(prompt)
             analysis = self.parse_resposta_gemini(response.text)
             
             if analysis.get('relevante', False):
@@ -299,9 +259,8 @@ class NewsProcessorCompleto:
                 return False
                 
         except Exception as e:
-            print(f"   ❌ Erro Gemini na análise: {e}")
-            # Em caso de erro, permite que o artigo passe
-            return True
+            print(f"   ❌ Erro Gemini: {e}")
+            return False
     
     def parse_resposta_gemini(self, response_text):
         """Parse da resposta do Gemini"""
@@ -328,15 +287,16 @@ class NewsProcessorCompleto:
         return None, None
     
     def train_ml_model(self):
-        """Treina modelo ML com feedback"""
-        if not os.path.exists(self.feedback_file) or os.path.getsize(self.feedback_file) < 50:
-            print("📊 CSV de feedback vazio ou insuficiente")
-            return None, None
-        
+        """Treina modelo ML com feedback do PostgreSQL"""
         try:
-            df = pd.read_csv(self.feedback_file)
+            import sqlite3
+            conn = sqlite3.connect("database/brazmar.db")
             
-            if 'relevant' not in df.columns or len(df) < 5:
+            # Pega feedback do banco
+            df = pd.read_sql_query('SELECT title, summary, relevant FROM feedback', conn)
+            conn.close()
+            
+            if len(df) < 5:
                 print("⚠️ Dados insuficientes para treinar ML")
                 return None, None
             
@@ -352,7 +312,7 @@ class NewsProcessorCompleto:
             pipeline.fit(texts, labels)
             joblib.dump(pipeline.named_steps['clf'], self.model_file)
             joblib.dump(pipeline.named_steps['tfidf'], self.vectorizer_file)
-            print("✅ Modelo ML treinado com feedback")
+            print(f"✅ Modelo ML treinado com {len(df)} feedbacks do PostgreSQL")
             return pipeline.named_steps['clf'], pipeline.named_steps['tfidf']
             
         except Exception as e:
@@ -360,9 +320,10 @@ class NewsProcessorCompleto:
             return None, None
     
     def salvar_no_database(self, artigos):
-        """Salva artigos no database JSON"""
+        """Salva artigos no JSON E no PostgreSQL"""
         os.makedirs("database", exist_ok=True)
         
+        # Salva no JSON (backup)
         try:
             with open(self.data_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
@@ -396,4 +357,10 @@ class NewsProcessorCompleto:
         with open(self.data_file, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
         
-        print(f"💾 Database atualizado: {novos} novos artigos (total: {len(data['articles'])})")
+        # AGORA TAMBÉM salva no PostgreSQL
+        salvos_pg = 0
+        for artigo in artigos:
+            if db.save_article(artigo):
+                salvos_pg += 1
+        
+        print(f"💾 Database atualizado: {novos} novos artigos (JSON), {salvos_pg} no PostgreSQL")
