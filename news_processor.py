@@ -9,9 +9,10 @@ import json
 import re
 from datetime import datetime
 import time
+import sqlite3
 
-# Importar database PostgreSQL
-from database_pg import db
+# Importar database HYBRID
+from database_hybrid import db
 
 class NewsProcessorCompleto:
     def __init__(self):
@@ -26,24 +27,32 @@ class NewsProcessorCompleto:
             "risco marítimo", "seguradora marítima", "apólice marítima", "seguro de carga",
             
             # Portos brasileiros específicos
-            "porto de Itaqui", "porto do Pecém", "porto de Suape", "porto de Santos",
-            "porto de Paranaguá", "porto de Rio Grande", "porto de São Luís", "porto de Fortaleza",
+            "porto de itaqui", "porto do pecém", "porto de suape", "porto de santos",
+            "porto de paranaguá", "porto de rio grande", "porto de são luís", "porto de fortaleza",
+            "porto de belém", "porto de macapá", "porto de manaus",
             
-            # Regulamentação e órgãos
-            "ANTAQ", "Marinha do Brasil", "DPC", "Capitania dos Portos", "Marinha",
+            # Órgãos e regulamentação
+            "antaq", "marinha do brasil", "dpc", "capitania dos portos", "marinha",
             "regulamentação portuária", "normativa portuária", "legislação marítima",
+            "ibama", "polícia federal", "pf", "agricultura", "defesa agropecuária",
             
-            # Operações portuárias
+            # Operações marítimas
             "cabotagem", "navegação interior", "hidrovia", "transporte aquaviário",
-            "terminal portuário", "movimentação portuária", "operações portuárias", "carga marítima",
+            "terminal portuário", "movimentação portuária", "operações portuárias", 
+            "carga marítima", "navio", "embarcação", "transporte de carga",
             
             # Regiões de atuação
-            "Maranhão", "Ceará", "Amapá", "Pará", "Nordeste", "Norte",
-            "São Luís", "Fortaleza", "Macapá", "Belém",
+            "maranhão", "ceará", "amapá", "pará", "nordeste", "norte",
+            "são luís", "fortaleza", "macapá", "belém", "manaus",
             
             # Acidentes e incidentes
             "acidente naval", "naufrágio", "colisão naval", "incidente portuário",
-            "acidente portuário", "avaria em navio", "navio", "porto", "marítimo"
+            "acidente portuário", "avaria em navio", "incidente marítimo",
+            
+            # Novos termos dos sites adicionados
+            "transito e transportes", "transporte aquaviario", "migalhas maritimas",
+            "diretoria de portos", "comando distrito naval", "agência brasil",
+            "polícia federal", "ibama", "ministério agricultura"
         ]
         
         self.NEGATIVE_KEYWORDS = [
@@ -53,7 +62,7 @@ class NewsProcessorCompleto:
         ]
         
         self.setup_gemini()
-        self.setup_ml_system()
+        self.setup_ml_system()  # AGORA COM ML REAL
     
     def setup_gemini(self):
         """Configura Gemini"""
@@ -72,10 +81,18 @@ class NewsProcessorCompleto:
             print("⚠️ Gemini não configurado - usando apenas filtros básicos")
     
     def setup_ml_system(self):
-        """Sistema de ML"""
+        """Sistema de ML COM TREINAMENTO AUTOMÁTICO"""
         self.ml_model, self.ml_vectorizer = self.load_ml_model()
+        
+        # Se não tem modelo E tem feedback suficiente, treina automaticamente
         if self.ml_model is None:
-            print("🔧 Modelo ML será treinado quando houver feedback suficiente")
+            print("🔧 Verificando se pode treinar ML com feedback existente...")
+            self.ml_model, self.ml_vectorizer = self.train_ml_model()
+            
+        if self.ml_model:
+            print("✅ ML ativo - modelo treinado com feedback")
+        else:
+            print("📊 ML aguardando feedback suficiente (mínimo 10)")
     
     def executar_coleta_completa(self):
         """Executa processamento COMPLETO"""
@@ -143,7 +160,7 @@ class NewsProcessorCompleto:
                 print("   ❌ Rejeitado pelo filtro automático")
                 continue
             
-            # Filtro ML (se disponível)
+            # Filtro ML (se disponível) - AGORA FUNCIONANDO
             if self.ml_model is not None:
                 relevante_ml = self.filtrar_por_ml(artigo)
                 if not relevante_ml:
@@ -194,19 +211,24 @@ class NewsProcessorCompleto:
         return score
     
     def filtrar_por_ml(self, artigo):
-        """Filtro por Machine Learning"""
+        """Filtro por Machine Learning treinado com feedback"""
         if self.ml_model is None or self.ml_vectorizer is None:
-            return True
-        
+            # Se não tem modelo, tenta treinar com feedback existente
+            self.ml_model, self.ml_vectorizer = self.train_ml_model()
+            if self.ml_model is None:
+                return True  # Permite passar se não tem modelo
+    
         try:
             combined_text = artigo['title'] + " " + artigo['summary']
             features = self.ml_vectorizer.transform([combined_text])
             prediction = self.ml_model.predict(features)[0]
             probability = self.ml_model.predict_proba(features)[0][1]
             
-            print(f"   🤖 ML - Predição: {prediction}, Probabilidade: {probability:.2f}")
-            return prediction == 1 and probability > 0.5
+            print(f"   🤖 ML - Relevante: {prediction}, Confiança: {probability:.2f}")
             
+            # Só rejeita se ML tiver ALTA confiança na irrelevância
+            return prediction == 1 or probability > 0.3
+                
         except Exception as e:
             print(f"   ❌ Erro ML: {e}")
             return True
@@ -287,32 +309,54 @@ class NewsProcessorCompleto:
         return None, None
     
     def train_ml_model(self):
-        """Treina modelo ML com feedback do PostgreSQL"""
+        """Treina modelo ML com feedback do banco - IMPLEMENTAÇÃO REAL"""
         try:
-            import sqlite3
-            conn = sqlite3.connect("database/brazmar.db")
+            # Pega TODOS os feedbacks do banco
+            if db.use_postgres:
+                import psycopg2
+                conn = psycopg2.connect(db.db_url, sslmode='require')
+                df = pd.read_sql_query('SELECT title, summary, relevant FROM feedback', conn)
+                conn.close()
+            else:
+                conn = sqlite3.connect("database/brazmar.db")
+                df = pd.read_sql_query('SELECT title, summary, relevant FROM feedback', conn)
+                conn.close()
             
-            # Pega feedback do banco
-            df = pd.read_sql_query('SELECT title, summary, relevant FROM feedback', conn)
-            conn.close()
+            print(f"📊 Treinando ML com {len(df)} feedbacks do banco")
             
-            if len(df) < 5:
-                print("⚠️ Dados insuficientes para treinar ML")
+            if len(df) < 10:  # Mínimo de 10 feedbacks para treinar
+                print("⚠️ Feedback insuficiente (mínimo 10)")
                 return None, None
             
+            # Prepara dados para treinamento
             df['text'] = df['title'].fillna('') + " " + df['summary'].fillna('')
             texts = df['text'].tolist()
             labels = df['relevant'].astype(bool).tolist()
             
+            # Pipeline de ML
             pipeline = Pipeline([
-                ('tfidf', TfidfVectorizer(max_features=500, stop_words='portuguese')),
-                ('clf', LogisticRegression())
+                ('tfidf', TfidfVectorizer(
+                    max_features=1000, 
+                    stop_words='portuguese',
+                    ngram_range=(1, 2)  # Captura bigramas também
+                )),
+                ('clf', LogisticRegression(
+                    class_weight='balanced',  # Balanceia dados desproporcionais
+                    random_state=42
+                ))
             ])
             
+            # Treina o modelo
             pipeline.fit(texts, labels)
+            
+            # Salva modelo treinado
             joblib.dump(pipeline.named_steps['clf'], self.model_file)
             joblib.dump(pipeline.named_steps['tfidf'], self.vectorizer_file)
-            print(f"✅ Modelo ML treinado com {len(df)} feedbacks do PostgreSQL")
+            
+            # Avaliação do modelo
+            accuracy = pipeline.score(texts, labels)
+            print(f"✅ Modelo ML treinado com {len(df)} feedbacks - Acurácia: {accuracy:.2f}")
+            
             return pipeline.named_steps['clf'], pipeline.named_steps['tfidf']
             
         except Exception as e:
@@ -320,7 +364,7 @@ class NewsProcessorCompleto:
             return None, None
     
     def salvar_no_database(self, artigos):
-        """Salva artigos no JSON E no PostgreSQL"""
+        """Salva artigos no JSON E no banco híbrido"""
         os.makedirs("database", exist_ok=True)
         
         # Salva no JSON (backup)
@@ -357,10 +401,10 @@ class NewsProcessorCompleto:
         with open(self.data_file, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
         
-        # AGORA TAMBÉM salva no PostgreSQL
-        salvos_pg = 0
+        # AGORA TAMBÉM salva no banco híbrido
+        salvos_db = 0
         for artigo in artigos:
             if db.save_article(artigo):
-                salvos_pg += 1
+                salvos_db += 1
         
-        print(f"💾 Database atualizado: {novos} novos artigos (JSON), {salvos_pg} no PostgreSQL")
+        print(f"💾 Database atualizado: {novos} novos artigos (JSON), {salvos_db} no banco")

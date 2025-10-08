@@ -23,8 +23,8 @@ try:
 except Exception as e:
     print(f"⚠️  Aviso dotenv: {e}")
 
-# Importar database PostgreSQL
-from database_pg import db
+# Importar database HYBRID
+from database_hybrid import db
 
 class BrazmarDashboard:
     def __init__(self):
@@ -52,13 +52,13 @@ class BrazmarDashboard:
             print(f"❌ Erro inicializando database: {e}")
     
     def get_dashboard_data(self):
-        """Obtém dados para o dashboard - Agora com PostgreSQL"""
+        """Obtém dados para o dashboard - Agora com banco híbrido"""
         try:
-            # Tenta pegar artigos do PostgreSQL primeiro
+            # Tenta pegar artigos do banco primeiro
             artigos_recentes = db.get_recent_articles(50)
             
             if artigos_recentes:
-                # Usa artigos do PostgreSQL
+                # Usa artigos do banco
                 hoje = datetime.now().strftime("%Y-%m-%d")
                 artigos_hoje = [
                     artigo for artigo in artigos_recentes
@@ -246,30 +246,66 @@ def api_atualizar():
 
 @app.route('/api/feedback', methods=['POST'])
 def receber_feedback():
-    """Sistema de feedback com PostgreSQL"""
+    """Sistema de feedback com banco híbrido"""
     try:
+        # Verifica se tem dados JSON
+        if not request.json:
+            return jsonify({'status': 'error', 'message': 'Dados JSON não fornecidos'}), 400
+        
         data = request.json
         title = data.get('title', '')
         summary = data.get('summary', '')
         relevant = data.get('relevant', False)
         
-        print(f"📝 Feedback: {title[:50]}... - Relevante: {relevant}")
+        print(f"📝 Recebendo feedback: {title[:50]}... - Relevante: {relevant}")
         
-        # Salva no PostgreSQL
+        # Validação básica
+        if not title:
+            return jsonify({'status': 'error', 'message': 'Título é obrigatório'}), 400
+        
+        # Salva no banco híbrido
         success = db.save_feedback(title, summary, relevant)
         
         if success:
-            return jsonify({'status': 'success', 'message': 'Feedback salvo no banco'})
+            return jsonify({
+                'status': 'success', 
+                'message': 'Feedback salvo com sucesso!'
+            })
         else:
-            return jsonify({'status': 'error', 'message': 'Erro ao salvar feedback'}), 500
+            return jsonify({
+                'status': 'error', 
+                'message': 'Erro ao salvar feedback no banco de dados'
+            }), 500
         
     except Exception as e:
         print(f"❌ Erro no feedback: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
+@app.route('/api/treinar-ml', methods=['POST'])
+def treinar_ml():
+    """Força treinamento do ML com feedback atual"""
+    try:
+        from news_processor import NewsProcessorCompleto
+        processor = NewsProcessorCompleto()
+        processor.ml_model, processor.ml_vectorizer = processor.train_ml_model()
+        
+        if processor.ml_model is not None:
+            return jsonify({
+                'status': 'success', 
+                'message': 'ML treinado com feedback atual!'
+            })
+        else:
+            return jsonify({
+                'status': 'error', 
+                'message': 'Feedback insuficiente para treinar ML (mínimo 10)'
+            }), 400
+        
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
 @app.route('/api/estatisticas')
 def api_estatisticas():
-    """Estatísticas do sistema com PostgreSQL"""
+    """Estatísticas do sistema com banco híbrido"""
     try:
         feedback_stats = db.get_feedback_stats()
         
@@ -280,7 +316,7 @@ def api_estatisticas():
             "feedback": feedback_stats,
             "modelo_treinado": model_exists,
             "gemini_habilitado": bool(os.getenv("GEMINI_API_KEY")),
-            "banco_dados": "✅ PostgreSQL",
+            "banco_dados": "✅ PostgreSQL" if db.use_postgres else "✅ SQLite",
             "plataforma": "Railway"
         })
     except Exception as e:
@@ -290,14 +326,15 @@ def api_estatisticas():
 def health_check():
     """Health check para Railway"""
     try:
-        # Testa conexão com PostgreSQL
+        # Testa conexão com banco
         stats = db.get_feedback_stats()
         
         return jsonify({
             "status": "healthy", 
             "service": "Brazmar News Bot",
             "timestamp": datetime.now().isoformat(),
-            "database": "✅ PostgreSQL conectado",
+            "database": "✅ Conectado",
+            "tipo_banco": "PostgreSQL" if db.use_postgres else "SQLite",
             "feedback_count": stats["total"]
         })
     except Exception as e:
@@ -311,7 +348,7 @@ print("=" * 60)
 print("🚀 BRAZMAR NEWS BOT - INICIANDO NO RAILWAY")
 print("=" * 60)
 print(f"🔑 Gemini: {'✅ CONFIGURADO' if os.getenv('GEMINI_API_KEY') else '❌ NÃO CONFIGURADO'}")
-print(f"🗄️  Database: PostgreSQL")
+print(f"🗄️  Database: {'PostgreSQL' if db.use_postgres else 'SQLite'}")
 print(f"🌐 Porta: {PORT}")
 
 # Inicia agendador IMEDIATAMENTE
