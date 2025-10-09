@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: brazmar-news
+    env: python
+    plan: free
+    buildCommand: |
+      pip install -r requirements.txt
+      python -c "import nltk; nltk.download('punkt'); nltk.download('punkt_tab')"
+    startCommand: python app.py
+    envVars:
+      - key: GROQ_API_KEY
+        value: seu_key_groq
+      - key: GEMINI_API_KEY
+        value: seu_key_gemini
+    healthCheckPath: /health
