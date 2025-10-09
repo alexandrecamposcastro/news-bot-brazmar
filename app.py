@@ -12,8 +12,8 @@ app = Flask(__name__)
 app.config['JSON_AS_ASCII'] = False
 CORS(app)
 
-# Configuração de porta para Railway
-PORT = int(os.environ.get('PORT', 10000))
+# Configuração de porta para Render
+PORT = int(os.environ.get('PORT', 5000))
 
 # Carregar variáveis de ambiente
 try:
@@ -208,6 +208,27 @@ class BrazmarScheduler:
 dashboard = BrazmarDashboard()
 scheduler = BrazmarScheduler()
 
+def salvar_feedback_csv(title, summary, relevant):
+    """Salva feedback no CSV para o ML"""
+    try:
+        # Cria arquivo se não existir
+        if not os.path.exists('feedback.csv'):
+            with open('feedback.csv', 'w', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+                writer.writerow(['title', 'summary', 'relevant', 'timestamp'])
+        
+        # Adiciona feedback
+        with open('feedback.csv', 'a', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            writer.writerow([title, summary, relevant, datetime.now()])
+        
+        print(f"💾 Feedback salvo no CSV: {title[:30]}...")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Erro salvando CSV: {e}")
+        return False
+
 # ROTAS DA APLICAÇÃO
 @app.route('/')
 def index():
@@ -246,7 +267,7 @@ def api_atualizar():
 
 @app.route('/api/feedback', methods=['POST'])
 def receber_feedback():
-    """Sistema de feedback com banco híbrido"""
+    """Sistema de feedback com banco híbrido E CSV para ML"""
     try:
         # Verifica se tem dados JSON
         if not request.json:
@@ -263,10 +284,13 @@ def receber_feedback():
         if not title:
             return jsonify({'status': 'error', 'message': 'Título é obrigatório'}), 400
         
-        # Salva no banco híbrido
-        success = db.save_feedback(title, summary, relevant)
+        # 1. Salva no banco híbrido
+        success_db = db.save_feedback(title, summary, relevant)
         
-        if success:
+        # 2. ✅ SALVA NO CSV PARA O ML
+        success_csv = salvar_feedback_csv(title, summary, relevant)
+        
+        if success_db or success_csv:
             return jsonify({
                 'status': 'success', 
                 'message': 'Feedback salvo com sucesso!'
@@ -297,7 +321,7 @@ def treinar_ml():
         else:
             return jsonify({
                 'status': 'error', 
-                'message': 'Feedback insuficiente para treinar ML (mínimo 10)'
+                'message': 'Feedback insuficiente para treinar ML (mínimo 5)'
             }), 400
         
     except Exception as e:
@@ -309,22 +333,29 @@ def api_estatisticas():
     try:
         feedback_stats = db.get_feedback_stats()
         
+        # Verifica se tem CSV de feedback
+        csv_count = 0
+        if os.path.exists('feedback.csv'):
+            with open('feedback.csv', 'r', encoding='utf-8') as f:
+                csv_count = sum(1 for line in f) - 1  # Exclui header
+        
         # Verifica se modelo ML existe
         model_exists = os.path.exists("relevance_model.pkl")
         
         return jsonify({
             "feedback": feedback_stats,
+            "feedback_csv": csv_count,
             "modelo_treinado": model_exists,
             "gemini_habilitado": bool(os.getenv("GEMINI_API_KEY")),
             "banco_dados": "✅ PostgreSQL" if db.use_postgres else "✅ SQLite",
-            "plataforma": "Railway"
+            "plataforma": "Render"
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 @app.route('/health')
 def health_check():
-    """Health check para Railway"""
+    """Health check para Render"""
     try:
         # Testa conexão com banco
         stats = db.get_feedback_stats()
@@ -345,7 +376,7 @@ def health_check():
 
 # INICIALIZAÇÃO DO SISTEMA
 print("=" * 60)
-print("🚀 BRAZMAR NEWS BOT - INICIANDO NO RAILWAY")
+print("🚀 BRAZMAR NEWS BOT - INICIANDO NO RENDER")
 print("=" * 60)
 print(f"🔑 Gemini: {'✅ CONFIGURADO' if os.getenv('GEMINI_API_KEY') else '❌ NÃO CONFIGURADO'}")
 print(f"🗄️  Database: {'PostgreSQL' if db.use_postgres else 'SQLite'}")
@@ -361,6 +392,5 @@ except Exception as e:
     traceback.print_exc()
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    # Executa uma coleta ao iniciar
-    app.run(host='0.0.0.0', port=port, debug=False)
+    # Inicia servidor web
+    app.run(host='0.0.0.0', port=PORT, debug=False)

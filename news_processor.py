@@ -71,7 +71,7 @@ class NewsProcessorCompleto:
         if api_key and api_key != "AIzaSyCamSIYRSrZ9JUHtnVNgLKdkQ42ySYAdNA":
             try:
                 genai.configure(api_key=api_key)
-                self.gemini_model = genai.GenerativeModel('gemini-2.5-flash')
+                self.gemini_model = genai.GenerativeModel('gemini-1.5-flash')
                 self.gemini_enabled = True
                 print("✅ Gemini Configurado (opcional)")
             except Exception as e:
@@ -251,36 +251,46 @@ class NewsProcessorCompleto:
         return None, None
     
     def train_ml_model(self):
-        """Treina modelo ML com feedback"""
+        """Treina modelo ML com feedbacks do CSV"""
         try:
-            if db.use_postgres:
-                import psycopg2
-                conn = psycopg2.connect(db.db_url, sslmode='require')
-                df = pd.read_sql_query('SELECT title, summary, relevant FROM feedback', conn)
-                conn.close()
-            else:
-                conn = sqlite3.connect("database/brazmar.db")
-                df = pd.read_sql_query('SELECT title, summary, relevant FROM feedback', conn)
-                conn.close()
+            import pandas as pd
+            import csv
             
-            if len(df) < 5:
-                print("⚠️ Dados insuficientes para treinar ML")
+            # Tenta carregar do CSV
+            dados = []
+            if os.path.exists("feedback.csv"):
+                with open("feedback.csv", 'r', encoding='utf-8') as f:
+                    reader = csv.DictReader(f)
+                    for row in reader:
+                        if row['title'] and row['relevant']:  # Verifica se não está vazio
+                            dados.append({
+                                'text': f"{row['title']} {row.get('summary', '')}",
+                                'label': row['relevant'].lower() == 'true'
+                            })
+            
+            if len(dados) < 5:
+                print("⚠️ Poucos feedbacks para treinar ML (mínimo 5)")
                 return None, None
             
-            df['text'] = df['title'].fillna('') + " " + df['summary'].fillna('')
-            texts = df['text'].tolist()
-            labels = df['relevant'].astype(bool).tolist()
+            print(f"🎯 Treinando ML com {len(dados)} feedbacks do CSV...")
             
-            pipeline = Pipeline([
-                ('tfidf', TfidfVectorizer(max_features=500, stop_words='portuguese')),
-                ('clf', LogisticRegression())
-            ])
+            # Prepara dados
+            textos = [item['text'] for item in dados]
+            labels = [item['label'] for item in dados]
             
-            pipeline.fit(texts, labels)
-            joblib.dump(pipeline.named_steps['clf'], self.model_file)
-            joblib.dump(pipeline.named_steps['tfidf'], self.vectorizer_file)
-            print(f"✅ Modelo ML treinado com {len(df)} feedbacks")
-            return pipeline.named_steps['clf'], pipeline.named_steps['tfidf']
+            # Treina modelo
+            vectorizer = TfidfVectorizer(max_features=500, stop_words='portuguese')
+            X = vectorizer.fit_transform(textos)
+            
+            model = LogisticRegression()
+            model.fit(X, labels)
+            
+            # Salva modelo
+            joblib.dump(model, self.model_file)
+            joblib.dump(vectorizer, self.vectorizer_file)
+            
+            print(f"✅ ML treinado! {sum(labels)} relevantes, {len(labels)-sum(labels)} irrelevantes")
+            return model, vectorizer
             
         except Exception as e:
             print(f"❌ Erro treinamento ML: {e}")
