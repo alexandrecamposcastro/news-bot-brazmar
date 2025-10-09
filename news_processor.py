@@ -11,8 +11,9 @@ from datetime import datetime
 import time
 import sqlite3
 
-# Importar database HYBRID
+# Importar database e IA
 from database_hybrid import db
+from ai_provider import ai_provider
 
 class NewsProcessorCompleto:
     def __init__(self):
@@ -62,37 +63,28 @@ class NewsProcessorCompleto:
         ]
         
         self.setup_gemini()
-        self.setup_ml_system()  # AGORA COM ML REAL
+        self.setup_ml_system()
     
     def setup_gemini(self):
-        """Configura Gemini"""
+        """Configura Gemini (opcional)"""
         api_key = os.getenv("GEMINI_API_KEY")
         if api_key and api_key != "AIzaSyCamSIYRSrZ9JUHtnVNgLKdkQ42ySYAdNA":
             try:
                 genai.configure(api_key=api_key)
-                self.model = genai.GenerativeModel('gemini-1.5-flash')
+                self.gemini_model = genai.GenerativeModel('gemini-2.5-flash')
                 self.gemini_enabled = True
-                print("✅ Gemini Configurado")
+                print("✅ Gemini Configurado (opcional)")
             except Exception as e:
                 print(f"❌ Erro configurando Gemini: {e}")
                 self.gemini_enabled = False
         else:
             self.gemini_enabled = False
-            print("⚠️ Gemini não configurado - usando apenas filtros básicos")
     
     def setup_ml_system(self):
-        """Sistema de ML COM TREINAMENTO AUTOMÁTICO"""
+        """Sistema de ML"""
         self.ml_model, self.ml_vectorizer = self.load_ml_model()
-        
-        # Se não tem modelo E tem feedback suficiente, treina automaticamente
         if self.ml_model is None:
-            print("🔧 Verificando se pode treinar ML com feedback existente...")
-            self.ml_model, self.ml_vectorizer = self.train_ml_model()
-            
-        if self.ml_model:
-            print("✅ ML ativo - modelo treinado com feedback")
-        else:
-            print("📊 ML aguardando feedback suficiente (mínimo 10)")
+            print("🔧 Modelo ML será treinado quando houver feedback suficiente")
     
     def executar_coleta_completa(self):
         """Executa processamento COMPLETO"""
@@ -145,7 +137,7 @@ class NewsProcessorCompleto:
         return artigos_processados
     
     def filtrar_artigos(self, artigos):
-        """Filtragem HÍBRIDA (ML + Gemini)"""
+        """Filtragem HÍBRIDA (ML + Multi-IA)"""
         artigos_relevantes = []
         
         for i, artigo in enumerate(artigos):
@@ -160,30 +152,28 @@ class NewsProcessorCompleto:
                 print("   ❌ Rejeitado pelo filtro automático")
                 continue
             
-            # Filtro ML (se disponível) - AGORA FUNCIONANDO
+            # Filtro ML (se disponível)
             if self.ml_model is not None:
                 relevante_ml = self.filtrar_por_ml(artigo)
                 if not relevante_ml:
                     print("   ❌ Rejeitado pelo ML")
                     continue
             
-            # Gemini (se disponível)
-            if self.gemini_enabled:
-                relevante_gemini = self.filtrar_por_gemini(artigo)
-                if not relevante_gemini:
-                    print("   ❌ Rejeitado pelo Gemini")
-                    continue
-                else:
-                    print("   ✅ Aprovado pelo Gemini")
+            # Multi-IA (substitui Gemini)
+            relevante_ia = self.filtrar_por_ia(artigo)
+            if not relevante_ia:
+                print("   ❌ Rejeitado pela IA")
+                continue
             else:
-                print("   ✅ Aprovado pelos filtros básicos")
+                print("   ✅ Aprovado pela IA")
             
             # Adiciona metadados
             artigo['processed_at'] = datetime.now().isoformat()
             artigo['collection_date'] = datetime.now().strftime("%Y-%m-%d")
-            artigo['ai_analyzed'] = self.gemini_enabled
+            artigo['ai_analyzed'] = True
+            artigo['ai_provider'] = ai_provider.current_provider
             
-            # Define urgência padrão se não definida pelo Gemini
+            # Define urgência padrão se não definida pela IA
             if 'urgencia' not in artigo:
                 artigo['urgencia'] = 'MEDIA'
             if 'confianca' not in artigo:
@@ -211,90 +201,42 @@ class NewsProcessorCompleto:
         return score
     
     def filtrar_por_ml(self, artigo):
-        """Filtro por Machine Learning treinado com feedback"""
+        """Filtro por Machine Learning"""
         if self.ml_model is None or self.ml_vectorizer is None:
-            # Se não tem modelo, tenta treinar com feedback existente
-            self.ml_model, self.ml_vectorizer = self.train_ml_model()
-            if self.ml_model is None:
-                return True  # Permite passar se não tem modelo
-    
+            return True
+        
         try:
             combined_text = artigo['title'] + " " + artigo['summary']
             features = self.ml_vectorizer.transform([combined_text])
             prediction = self.ml_model.predict(features)[0]
             probability = self.ml_model.predict_proba(features)[0][1]
             
-            print(f"   🤖 ML - Relevante: {prediction}, Confiança: {probability:.2f}")
+            print(f"   🤖 ML - Predição: {prediction}, Probabilidade: {probability:.2f}")
+            return prediction == 1 and probability > 0.5
             
-            # Só rejeita se ML tiver ALTA confiança na irrelevância
-            return prediction == 1 or probability > 0.3
-                
         except Exception as e:
             print(f"   ❌ Erro ML: {e}")
             return True
     
-    def filtrar_por_gemini(self, artigo):
-        """Filtro ESPECÍFICO para BRAZMAR MARINE SERVICES"""
+    def filtrar_por_ia(self, artigo):
+        """Filtro usando Multi-IA"""
         try:
-            prompt = f"""
-            ANALISAR para BRAZMAR MARINE SERVICES (seguros marítimos, consultoria portuária no Brasil):
-
-            TÍTULO: {artigo['title']}
-            RESUMO: {artigo['summary']}
-
-            CRITÉRIOS ESTRITOS - A notícia deve ser sobre:
-            ✅ Seguros marítimos, sinistros navais, avarias
-            ✅ Portos brasileiros (Itaqui, Pecém, Suape, Santos, etc.)
-            ✅ ANTAQ, Marinha do Brasil, regulamentação portuária
-            ✅ Acidentes/incidentes em portos ou navios
-            ✅ Operações de cabotagem, navegação interior
-            ✅ Região Norte/Nordeste do Brasil
-
-            ❌ REJEITAR se for sobre:
-            ❌ Turismo, cruzeiros, pesca esportiva
-            ❌ Notícias internacionais
-            ❌ Entretenimento, cultura, eventos
-            ❌ Assuntos gerais sem ligação direta com operações marítimas
-
-            Esta notícia é RELEVANTE para seguros marítimos ou operações portuárias da BRAZMAR?
-
-            Responda APENAS com JSON:
-            {{
-                "relevante": true/false,
-                "confianca": 0-100,
-                "motivo": "explicação específica",
-                "urgencia": "BAIXA/MEDIA/ALTA"
-            }}
-            """
-            
-            response = self.model.generate_content(prompt)
-            analysis = self.parse_resposta_gemini(response.text)
+            analysis = ai_provider.analyze_article(artigo['title'], artigo['summary'])
             
             if analysis.get('relevante', False):
-                artigo['gemini_analysis'] = analysis
+                artigo['ia_analysis'] = analysis
                 artigo['confianca'] = analysis.get('confianca', 0)
-                artigo['urgencia'] = analysis.get('urgencia', 'BAIXA')
-                print(f"   ✅ Gemini - Confiança: {analysis.get('confianca', 0)}%")
+                artigo['urgencia'] = analysis.get('urgencia', 'MEDIA')
+                artigo['ia_provider'] = ai_provider.current_provider
+                print(f"   ✅ {ai_provider.current_provider.upper()} - Confiança: {analysis.get('confianca', 0)}%")
                 return True
             else:
-                print(f"   ❌ Gemini - Motivo: {analysis.get('motivo', 'N/A')}")
+                print(f"   ❌ {ai_provider.current_provider.upper()} - Motivo: {analysis.get('motivo', 'N/A')}")
                 return False
                 
         except Exception as e:
-            print(f"   ❌ Erro Gemini: {e}")
-            return False
-    
-    def parse_resposta_gemini(self, response_text):
-        """Parse da resposta do Gemini"""
-        try:
-            cleaned = re.sub(r'```json|```', '', response_text).strip()
-            json_match = re.search(r'\{[^}]*\}', cleaned, re.DOTALL)
-            if json_match:
-                return json.loads(json_match.group())
-        except Exception as e:
-            print(f"   ❌ Erro parse Gemini: {e}")
-        
-        return {"relevante": False, "confianca": 0, "motivo": "Erro na análise", "urgencia": "BAIXA"}
+            print(f"   ❌ Erro IA: {e}")
+            return True  # Em caso de erro, permite passar
     
     def load_ml_model(self):
         """Carrega modelo ML"""
@@ -309,9 +251,8 @@ class NewsProcessorCompleto:
         return None, None
     
     def train_ml_model(self):
-        """Treina modelo ML com feedback do banco - IMPLEMENTAÇÃO REAL"""
+        """Treina modelo ML com feedback"""
         try:
-            # Pega TODOS os feedbacks do banco
             if db.use_postgres:
                 import psycopg2
                 conn = psycopg2.connect(db.db_url, sslmode='require')
@@ -322,41 +263,23 @@ class NewsProcessorCompleto:
                 df = pd.read_sql_query('SELECT title, summary, relevant FROM feedback', conn)
                 conn.close()
             
-            print(f"📊 Treinando ML com {len(df)} feedbacks do banco")
-            
-            if len(df) < 10:  # Mínimo de 10 feedbacks para treinar
-                print("⚠️ Feedback insuficiente (mínimo 10)")
+            if len(df) < 5:
+                print("⚠️ Dados insuficientes para treinar ML")
                 return None, None
             
-            # Prepara dados para treinamento
             df['text'] = df['title'].fillna('') + " " + df['summary'].fillna('')
             texts = df['text'].tolist()
             labels = df['relevant'].astype(bool).tolist()
             
-            # Pipeline de ML
             pipeline = Pipeline([
-                ('tfidf', TfidfVectorizer(
-                    max_features=1000, 
-                    stop_words='portuguese',
-                    ngram_range=(1, 2)  # Captura bigramas também
-                )),
-                ('clf', LogisticRegression(
-                    class_weight='balanced',  # Balanceia dados desproporcionais
-                    random_state=42
-                ))
+                ('tfidf', TfidfVectorizer(max_features=500, stop_words='portuguese')),
+                ('clf', LogisticRegression())
             ])
             
-            # Treina o modelo
             pipeline.fit(texts, labels)
-            
-            # Salva modelo treinado
             joblib.dump(pipeline.named_steps['clf'], self.model_file)
             joblib.dump(pipeline.named_steps['tfidf'], self.vectorizer_file)
-            
-            # Avaliação do modelo
-            accuracy = pipeline.score(texts, labels)
-            print(f"✅ Modelo ML treinado com {len(df)} feedbacks - Acurácia: {accuracy:.2f}")
-            
+            print(f"✅ Modelo ML treinado com {len(df)} feedbacks")
             return pipeline.named_steps['clf'], pipeline.named_steps['tfidf']
             
         except Exception as e:
@@ -364,7 +287,7 @@ class NewsProcessorCompleto:
             return None, None
     
     def salvar_no_database(self, artigos):
-        """Salva artigos no JSON E no banco híbrido"""
+        """Salva artigos no JSON E no banco"""
         os.makedirs("database", exist_ok=True)
         
         # Salva no JSON (backup)
@@ -401,7 +324,7 @@ class NewsProcessorCompleto:
         with open(self.data_file, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
         
-        # AGORA TAMBÉM salva no banco híbrido
+        # Salva no banco
         salvos_db = 0
         for artigo in artigos:
             if db.save_article(artigo):
