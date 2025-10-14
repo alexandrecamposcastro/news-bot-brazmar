@@ -14,6 +14,7 @@ import sqlite3
 # Importar database e IA
 from database_hybrid import db
 from ai_provider import ai_provider
+from github_manager import github_manager
 
 class NewsProcessorCompleto:
     def __init__(self):
@@ -152,14 +153,14 @@ class NewsProcessorCompleto:
                 print("   ❌ Rejeitado pelo filtro automático")
                 continue
             
-            # Filtro ML (se disponível)
+            # Filtro ML (se disponível) - COMO FALLBACK
             if self.ml_model is not None:
                 relevante_ml = self.filtrar_por_ml(artigo)
                 if not relevante_ml:
                     print("   ❌ Rejeitado pelo ML")
                     continue
             
-            # Multi-IA (substitui Gemini)
+            # Multi-IA (principal)
             relevante_ia = self.filtrar_por_ia(artigo)
             if not relevante_ia:
                 print("   ❌ Rejeitado pela IA")
@@ -201,7 +202,7 @@ class NewsProcessorCompleto:
         return score
     
     def filtrar_por_ml(self, artigo):
-        """Filtro por Machine Learning"""
+        """Filtro por Machine Learning - COMO FALLBACK"""
         if self.ml_model is None or self.ml_vectorizer is None:
             return True
         
@@ -211,7 +212,7 @@ class NewsProcessorCompleto:
             prediction = self.ml_model.predict(features)[0]
             probability = self.ml_model.predict_proba(features)[0][1]
             
-            print(f"   🤖 ML - Predição: {prediction}, Probabilidade: {probability:.2f}")
+            print(f"   🤖 ML Fallback: {prediction} ({probability:.2f})")
             return prediction == 1 and probability > 0.5
             
         except Exception as e:
@@ -236,7 +237,9 @@ class NewsProcessorCompleto:
                 
         except Exception as e:
             print(f"   ❌ Erro IA: {e}")
-            return True  # Em caso de erro, permite passar
+            # Em caso de erro na IA, usa ML como fallback
+            print("   🔄 IA falhou, usando ML como fallback...")
+            return self.filtrar_por_ml(artigo)
     
     def load_ml_model(self):
         """Carrega modelo ML"""
@@ -251,32 +254,30 @@ class NewsProcessorCompleto:
         return None, None
     
     def train_ml_model(self):
-        """Treina modelo ML com feedbacks do CSV"""
+        """Treina modelo ML com feedbacks do GitHub"""
         try:
+            # ✅ GARANTE que tem o CSV mais recente do GitHub
+            if os.getenv("GITHUB_TOKEN"):
+                github_manager.download_csv_for_ml()
+            
+            if not os.path.exists("feedback.csv"):
+                print("❌ CSV de feedback não encontrado")
+                return False
+                
             import pandas as pd
-            import csv
             
-            # Tenta carregar do CSV
-            dados = []
-            if os.path.exists("feedback.csv"):
-                with open("feedback.csv", 'r', encoding='utf-8') as f:
-                    reader = csv.DictReader(f)
-                    for row in reader:
-                        if row['title'] and row['relevant']:  # Verifica se não está vazio
-                            dados.append({
-                                'text': f"{row['title']} {row.get('summary', '')}",
-                                'label': row['relevant'].lower() == 'true'
-                            })
+            # ✅ LÊ DO CSV (que veio do GitHub)
+            df = pd.read_csv("feedback.csv")
             
-            if len(dados) < 5:
-                print("⚠️ Poucos feedbacks para treinar ML (mínimo 5)")
-                return None, None
+            if len(df) < 5:
+                print(f"⚠️ Poucos feedbacks para treinar: {len(df)}")
+                return False
             
-            print(f"🎯 Treinando ML com {len(dados)} feedbacks do CSV...")
+            print(f"🎯 Treinando ML com {len(df)} feedbacks do GitHub")
             
             # Prepara dados
-            textos = [item['text'] for item in dados]
-            labels = [item['label'] for item in dados]
+            textos = (df['title'] + " " + df['summary'].fillna('')).tolist()
+            labels = df['relevant'].astype(bool).tolist()
             
             # Treina modelo
             vectorizer = TfidfVectorizer(max_features=500, stop_words='portuguese')
@@ -290,11 +291,15 @@ class NewsProcessorCompleto:
             joblib.dump(vectorizer, self.vectorizer_file)
             
             print(f"✅ ML treinado! {sum(labels)} relevantes, {len(labels)-sum(labels)} irrelevantes")
-            return model, vectorizer
+            
+            # Atualiza modelo em memória
+            self.ml_model, self.ml_vectorizer = model, vectorizer
+            
+            return True
             
         except Exception as e:
             print(f"❌ Erro treinamento ML: {e}")
-            return None, None
+            return False
     
     def salvar_no_database(self, artigos):
         """Salva artigos no JSON E no banco"""

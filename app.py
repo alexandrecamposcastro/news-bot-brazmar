@@ -2,7 +2,7 @@ import os
 import json
 import csv
 from datetime import datetime
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, render_template, jsonify, request, send_file
 from flask_cors import CORS
 import threading
 import time
@@ -23,8 +23,9 @@ try:
 except Exception as e:
     print(f"⚠️  Aviso dotenv: {e}")
 
-# Importar database HYBRID
+# Importar database HYBRID e GitHub Manager
 from database_hybrid import db
+from github_manager import github_manager
 
 class BrazmarDashboard:
     def __init__(self):
@@ -208,25 +209,36 @@ class BrazmarScheduler:
 dashboard = BrazmarDashboard()
 scheduler = BrazmarScheduler()
 
-def salvar_feedback_csv(title, summary, relevant):
-    """Salva feedback no CSV para o ML"""
+def treinar_ml_com_csv():
+    """Treina ML usando o CSV"""
     try:
-        # Cria arquivo se não existir
         if not os.path.exists('feedback.csv'):
-            with open('feedback.csv', 'w', newline='', encoding='utf-8') as f:
-                writer = csv.writer(f)
-                writer.writerow(['title', 'summary', 'relevant', 'timestamp'])
+            print("❌ CSV não encontrado para treinamento")
+            return False
+            
+        # Conta linhas no CSV
+        with open('feedback.csv', 'r', encoding='utf-8') as f:
+            linhas = sum(1 for line in f)
         
-        # Adiciona feedback
-        with open('feedback.csv', 'a', newline='', encoding='utf-8') as f:
-            writer = csv.writer(f)
-            writer.writerow([title, summary, relevant, datetime.now()])
+        print(f"📊 Feedbacks no CSV: {linhas - 1}")
         
-        print(f"💾 Feedback salvo no CSV: {title[:30]}...")
-        return True
-        
+        if linhas >= 6:  # 1 header + 5 feedbacks
+            print("🎯 Treinando ML com CSV...")
+            from news_processor import NewsProcessorCompleto
+            processor = NewsProcessorCompleto()
+            success = processor.train_ml_model()
+            if success:
+                print("✅✅✅ ML treinado com sucesso!")
+                return True
+            else:
+                print("⚠️ ML não foi treinado (erro ou dados insuficientes)")
+                return False
+        else:
+            print(f"⚠️ Feedbacks insuficientes: {linhas - 1}/5")
+            return False
+            
     except Exception as e:
-        print(f"❌ Erro salvando CSV: {e}")
+        print(f"❌ Erro treinamento ML: {e}")
         return False
 
 # ROTAS DA APLICAÇÃO
@@ -267,7 +279,7 @@ def api_atualizar():
 
 @app.route('/api/feedback', methods=['POST'])
 def receber_feedback():
-    """Sistema de feedback com banco híbrido E CSV para ML"""
+    """Sistema de feedback -> GitHub -> CSV -> ML"""
     try:
         # Verifica se tem dados JSON
         if not request.json:
@@ -284,21 +296,22 @@ def receber_feedback():
         if not title:
             return jsonify({'status': 'error', 'message': 'Título é obrigatório'}), 400
         
-        # 1. Salva no banco híbrido
-        success_db = db.save_feedback(title, summary, relevant)
+        # ✅ SALVA NO GITHUB
+        success = github_manager.save_feedback_to_github(title, summary, relevant)
         
-        # 2. ✅ SALVA NO CSV PARA O ML
-        success_csv = salvar_feedback_csv(title, summary, relevant)
-        
-        if success_db or success_csv:
+        if success:
+            # ✅ BAIXA CSV ATUALIZADO E TREINA ML
+            if github_manager.download_csv_for_ml():
+                treinar_ml_com_csv()
+            
             return jsonify({
                 'status': 'success', 
-                'message': 'Feedback salvo com sucesso!'
+                'message': 'Feedback salvo no GitHub e ML atualizado!'
             })
         else:
             return jsonify({
                 'status': 'error', 
-                'message': 'Erro ao salvar feedback no banco de dados'
+                'message': 'Erro ao salvar feedback no GitHub'
             }), 500
         
     except Exception as e:
@@ -307,29 +320,22 @@ def receber_feedback():
 
 @app.route('/api/treinar-ml', methods=['POST'])
 def treinar_ml():
-    """Força treinamento do ML com feedback atual"""
+    """Força treinamento do ML"""
     try:
-        from news_processor import NewsProcessorCompleto
-        processor = NewsProcessorCompleto()
-        processor.ml_model, processor.ml_vectorizer = processor.train_ml_model()
+        # Baixa CSV mais recente do GitHub
+        github_manager.download_csv_for_ml()
+        success = treinar_ml_com_csv()
         
-        if processor.ml_model is not None:
-            return jsonify({
-                'status': 'success', 
-                'message': 'ML treinado com feedback atual!'
-            })
+        if success:
+            return jsonify({'status': 'success', 'message': 'ML treinado com sucesso!'})
         else:
-            return jsonify({
-                'status': 'error', 
-                'message': 'Feedback insuficiente para treinar ML (mínimo 5)'
-            }), 400
-        
+            return jsonify({'status': 'error', 'message': 'Erro ao treinar ML'}), 400
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 @app.route('/api/estatisticas')
 def api_estatisticas():
-    """Estatísticas do sistema com banco híbrido"""
+    """Estatísticas do sistema"""
     try:
         feedback_stats = db.get_feedback_stats()
         
@@ -347,11 +353,22 @@ def api_estatisticas():
             "feedback_csv": csv_count,
             "modelo_treinado": model_exists,
             "gemini_habilitado": bool(os.getenv("GEMINI_API_KEY")),
+            "github_configurado": bool(os.getenv("GITHUB_TOKEN")),
             "banco_dados": "✅ PostgreSQL" if db.use_postgres else "✅ SQLite",
             "plataforma": "Render"
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@app.route('/download-csv')
+def download_csv():
+    """Baixa o CSV de feedbacks"""
+    try:
+        # Baixa CSV mais recente do GitHub primeiro
+        github_manager.download_csv_for_ml()
+        return send_file('feedback.csv', as_attachment=True, as_text=False)
+    except Exception as e:
+        return f"Erro ao baixar CSV: {e}", 404
 
 @app.route('/health')
 def health_check():
@@ -366,6 +383,7 @@ def health_check():
             "timestamp": datetime.now().isoformat(),
             "database": "✅ Conectado",
             "tipo_banco": "PostgreSQL" if db.use_postgres else "SQLite",
+            "github": "✅ Configurado" if os.getenv("GITHUB_TOKEN") else "❌ Não configurado",
             "feedback_count": stats["total"]
         })
     except Exception as e:
@@ -379,8 +397,17 @@ print("=" * 60)
 print("🚀 BRAZMAR NEWS BOT - INICIANDO NO RENDER")
 print("=" * 60)
 print(f"🔑 Gemini: {'✅ CONFIGURADO' if os.getenv('GEMINI_API_KEY') else '❌ NÃO CONFIGURADO'}")
+print(f"🔑 GitHub: {'✅ CONFIGURADO' if os.getenv('GITHUB_TOKEN') else '❌ NÃO CONFIGURADO'}")
 print(f"🗄️  Database: {'PostgreSQL' if db.use_postgres else 'SQLite'}")
 print(f"🌐 Porta: {PORT}")
+
+# Baixa CSV do GitHub ao iniciar
+try:
+    if os.getenv("GITHUB_TOKEN"):
+        print("📥 Baixando CSV do GitHub...")
+        github_manager.download_csv_for_ml()
+except Exception as e:
+    print(f"⚠️ Erro baixando CSV inicial: {e}")
 
 # Inicia agendador IMEDIATAMENTE
 try:
