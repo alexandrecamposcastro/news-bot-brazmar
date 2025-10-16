@@ -3,6 +3,7 @@ import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
+from history_manager import history_manager
 import joblib
 import os
 import json
@@ -302,47 +303,50 @@ class NewsProcessorCompleto:
             return False
     
     def salvar_no_database(self, artigos):
-        """Salva artigos no JSON E no banco"""
+        """Salva artigos no JSON, banco E histórico"""
         os.makedirs("database", exist_ok=True)
-        
+    
         # Salva no JSON (backup)
         try:
             with open(self.data_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
         except FileNotFoundError:
             data = {"articles": [], "stats": {}}
-        
+    
         # Adiciona novos artigos (evita duplicatas)
         titulos_existentes = {a['title'] for a in data['articles']}
         novos = 0
-        
+    
         for artigo in artigos:
             if artigo['title'] not in titulos_existentes:
                 data['articles'].append(artigo)
                 novos += 1
-        
-        # Mantém apenas últimos 200 artigos
+            
+            # ✅ ADICIONA AO HISTÓRICO
+            history_manager.add_to_history(artigo)
+    
+        # Mantém apenas últimos 200 artigos no JSON
         data['articles'] = data['articles'][-200:]
-        
+    
         # Atualiza estatísticas
         hoje = datetime.now().strftime("%Y-%m-%d")
         artigos_hoje = [a for a in data['articles'] if a.get('collection_date') == hoje]
-        
+    
         data['stats'] = {
             "total_articles": len(data['articles']),
             "today_articles": len(artigos_hoje),
             "last_updated": datetime.now().isoformat()
         }
-        
+    
         data['last_updated'] = datetime.now().isoformat()
-        
+    
         with open(self.data_file, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
-        
+    
         # Salva no banco
         salvos_db = 0
         for artigo in artigos:
             if db.save_article(artigo):
                 salvos_db += 1
-        
-        print(f"💾 Database atualizado: {novos} novos artigos (JSON), {salvos_db} no banco")
+    
+        print(f"💾 Database atualizado: {novos} novos artigos (JSON), {salvos_db} no banco, {novos} no histórico")

@@ -26,6 +26,7 @@ except Exception as e:
 # Importar database HYBRID e GitHub Manager
 from database_hybrid import db
 from github_manager import github_manager
+from history_manager import history_manager
 
 class BrazmarDashboard:
     def __init__(self):
@@ -209,6 +210,14 @@ class BrazmarScheduler:
 dashboard = BrazmarDashboard()
 scheduler = BrazmarScheduler()
 
+def criar_csv_se_nao_existir():
+    """Cria o CSV se não existir"""
+    if not os.path.exists('feedback.csv'):
+        with open('feedback.csv', 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            writer.writerow(['title', 'summary', 'relevant', 'timestamp'])
+        print("✅ CSV criado")
+
 def treinar_ml_com_csv():
     """Treina ML usando o CSV"""
     try:
@@ -296,23 +305,23 @@ def receber_feedback():
         if not title:
             return jsonify({'status': 'error', 'message': 'Título é obrigatório'}), 400
         
-        # ✅ SALVA NO GITHUB
-        success = github_manager.save_feedback_to_github(title, summary, relevant)
+        # Garante que CSV existe
+        criar_csv_se_nao_existir()
         
-        if success:
-            # ✅ BAIXA CSV ATUALIZADO E TREINA ML
-            if github_manager.download_csv_for_ml():
-                treinar_ml_com_csv()
-            
-            return jsonify({
-                'status': 'success', 
-                'message': 'Feedback salvo no GitHub e ML atualizado!'
-            })
-        else:
-            return jsonify({
-                'status': 'error', 
-                'message': 'Erro ao salvar feedback no GitHub'
-            }), 500
+        # ✅ SALVA NO CSV
+        with open('feedback.csv', 'a', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            writer.writerow([title, summary, relevant, datetime.now()])
+        
+        print("✅ Feedback salvo no CSV")
+        
+        # ✅ TREINA ML COM O CSV
+        treinar_ml_com_csv()
+        
+        return jsonify({
+            'status': 'success', 
+            'message': 'Feedback salvo e ML atualizado!'
+        })
         
     except Exception as e:
         print(f"❌ Erro no feedback: {e}")
@@ -323,7 +332,8 @@ def treinar_ml():
     """Força treinamento do ML"""
     try:
         # Baixa CSV mais recente do GitHub
-        github_manager.download_csv_for_ml()
+        if os.getenv("GITHUB_TOKEN"):
+            github_manager.download_csv_for_ml()
         success = treinar_ml_com_csv()
         
         if success:
@@ -348,10 +358,14 @@ def api_estatisticas():
         # Verifica se modelo ML existe
         model_exists = os.path.exists("relevance_model.pkl")
         
+        # Estatísticas do histórico
+        history_stats = history_manager.get_stats()
+        
         return jsonify({
             "feedback": feedback_stats,
             "feedback_csv": csv_count,
             "modelo_treinado": model_exists,
+            "historico": history_stats,
             "gemini_habilitado": bool(os.getenv("GEMINI_API_KEY")),
             "github_configurado": bool(os.getenv("GITHUB_TOKEN")),
             "banco_dados": "✅ PostgreSQL" if db.use_postgres else "✅ SQLite",
@@ -365,7 +379,8 @@ def download_csv():
     """Baixa o CSV de feedbacks"""
     try:
         # Baixa CSV mais recente do GitHub primeiro
-        github_manager.download_csv_for_ml()
+        if os.getenv("GITHUB_TOKEN"):
+            github_manager.download_csv_for_ml()
         return send_file('feedback.csv', as_attachment=True, as_text=False)
     except Exception as e:
         return f"Erro ao baixar CSV: {e}", 404
@@ -376,6 +391,7 @@ def health_check():
     try:
         # Testa conexão com banco
         stats = db.get_feedback_stats()
+        history_stats = history_manager.get_stats()
         
         return jsonify({
             "status": "healthy", 
@@ -384,6 +400,7 @@ def health_check():
             "database": "✅ Conectado",
             "tipo_banco": "PostgreSQL" if db.use_postgres else "SQLite",
             "github": "✅ Configurado" if os.getenv("GITHUB_TOKEN") else "❌ Não configurado",
+            "historico": f"✅ {history_stats['total_news']} notícias",
             "feedback_count": stats["total"]
         })
     except Exception as e:
@@ -392,6 +409,320 @@ def health_check():
             "error": str(e)
         }), 500
 
+# 🆕 ROTAS DO HISTÓRICO
+@app.route('/historico')
+def historico():
+    """Página do histórico de notícias"""
+    return """
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>BRAZMAR - Histórico de Notícias</title>
+        <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { 
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+                background: #f5f5f5; 
+                color: #333; 
+                line-height: 1.6;
+            }
+            .header { 
+                background: #2c3e50; 
+                color: white; 
+                padding: 2rem 1rem; 
+                text-align: center; 
+                margin-bottom: 2rem;
+            }
+            .header h1 { 
+                margin-bottom: 0.5rem; 
+                font-size: 2.5rem;
+            }
+            .container { 
+                max-width: 1200px; 
+                margin: 0 auto; 
+                padding: 0 1rem; 
+            }
+            .controls { 
+                background: white; 
+                padding: 1.5rem; 
+                border-radius: 10px; 
+                margin: 2rem 0; 
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }
+            .btn { 
+                background: #3498db; 
+                color: white; 
+                border: none; 
+                padding: 0.8rem 1.5rem; 
+                border-radius: 6px; 
+                cursor: pointer; 
+                margin: 0 0.5rem; 
+                font-size: 1rem;
+                transition: background 0.2s;
+                text-decoration: none;
+                display: inline-block;
+            }
+            .btn:hover { background: #2980b9; }
+            .btn-success { background: #27ae60; }
+            .btn-success:hover { background: #219653; }
+            .btn-purple { background: #9b59b6; }
+            .btn-purple:hover { background: #8e44ad; }
+            .search-box { 
+                padding: 0.8rem; 
+                border: 1px solid #ddd; 
+                border-radius: 6px; 
+                width: 300px; 
+                font-size: 1rem;
+                margin-right: 1rem;
+            }
+            .stats-grid { 
+                display: grid; 
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); 
+                gap: 1.5rem; 
+                margin: 2rem 0; 
+            }
+            .stat-card { 
+                background: white; 
+                padding: 1.5rem; 
+                border-radius: 10px; 
+                box-shadow: 0 4px 6px rgba(0,0,0,0.1); 
+                text-align: center; 
+            }
+            .stat-number { 
+                font-size: 2.5rem; 
+                font-weight: bold; 
+                margin: 0.5rem 0; 
+                color: #2c3e50;
+            }
+            .news-list { 
+                background: white; 
+                border-radius: 10px; 
+                padding: 2rem; 
+                margin: 2rem 0; 
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }
+            .news-item { 
+                padding: 1.5rem; 
+                border-bottom: 1px solid #eee; 
+                margin-bottom: 1rem; 
+                border-radius: 8px;
+                transition: background 0.2s;
+            }
+            .news-item:hover {
+                background: #f8f9fa;
+            }
+            .news-item:last-child { border-bottom: none; }
+            .news-title { 
+                font-weight: bold; 
+                margin-bottom: 0.8rem; 
+                color: #2c3e50; 
+                font-size: 1.2rem;
+            }
+            .news-meta { 
+                font-size: 0.9rem; 
+                color: #666; 
+                margin-bottom: 0.8rem; 
+                display: flex;
+                flex-wrap: wrap;
+                gap: 1rem;
+            }
+            .priority-badge { 
+                display: inline-block; 
+                padding: 0.3rem 0.8rem; 
+                border-radius: 20px; 
+                color: white; 
+                font-size: 0.8rem; 
+                font-weight: bold;
+            }
+            .priority-alta { background: #e74c3c; }
+            .priority-media { background: #f39c12; }
+            .priority-baixa { background: #27ae60; }
+            .loading { 
+                text-align: center; 
+                padding: 2rem; 
+                color: #666; 
+            }
+            .back-btn {
+                margin-bottom: 1rem;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>📚 Histórico de Notícias</h1>
+            <p>BRAZMAR MARINE SERVICES - Todas as notícias processadas</p>
+        </div>
+
+        <div class="container">
+            <a href="/" class="btn back-btn">← Voltar ao Dashboard</a>
+
+            <div class="stats-grid" id="statsGrid">
+                <div class="stat-card">
+                    <div>Total de Notícias</div>
+                    <div class="stat-number" id="totalNews">0</div>
+                    <div>No histórico</div>
+                </div>
+                <div class="stat-card">
+                    <div>Última Atualização</div>
+                    <div class="stat-number" id="lastUpdated">-</div>
+                    <div>Do histórico</div>
+                </div>
+            </div>
+
+            <div class="controls">
+                <input type="text" id="searchInput" class="search-box" placeholder="🔍 Buscar por palavra-chave..." />
+                <button class="btn" onclick="searchHistory()">Buscar</button>
+                <button class="btn btn-success" onclick="loadRecent()">Ver Recentes</button>
+                <button class="btn" onclick="clearSearch()">Limpar</button>
+            </div>
+
+            <div class="news-list">
+                <h2 style="margin-bottom: 1.5rem;" id="resultsTitle">📰 Últimas Notícias no Histórico</h2>
+                <div id="historyResults">
+                    <div class="loading">Carregando notícias...</div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            function loadStats() {
+                fetch('/api/historico/estatisticas')
+                    .then(r => r.json())
+                    .then(data => {
+                        document.getElementById('totalNews').textContent = data.total_news;
+                        document.getElementById('lastUpdated').textContent = 
+                            data.last_updated === 'Nunca' ? 'Nunca' : 
+                            new Date(data.last_updated).toLocaleDateString('pt-BR');
+                    });
+            }
+            
+            function loadRecent() {
+                document.getElementById('resultsTitle').textContent = '📰 Últimas Notícias no Histórico';
+                document.getElementById('historyResults').innerHTML = '<div class="loading">Carregando...</div>';
+                
+                fetch('/api/historico/recentes')
+                    .then(r => r.json())
+                    .then(data => {
+                        displayResults(data);
+                    })
+                    .catch(error => {
+                        document.getElementById('historyResults').innerHTML = '<div class="loading">Erro ao carregar</div>';
+                    });
+            }
+            
+            function searchHistory() {
+                const query = document.getElementById('searchInput').value.trim();
+                if (!query) {
+                    alert('Digite algo para buscar');
+                    return;
+                }
+                
+                document.getElementById('resultsTitle').textContent = `🔍 Resultados para: "${query}"`;
+                document.getElementById('historyResults').innerHTML = '<div class="loading">Buscando...</div>';
+                
+                fetch('/api/historico/buscar?q=' + encodeURIComponent(query))
+                    .then(r => r.json())
+                    .then(data => {
+                        displayResults(data);
+                    })
+                    .catch(error => {
+                        document.getElementById('historyResults').innerHTML = '<div class="loading">Erro na busca</div>';
+                    });
+            }
+            
+            function clearSearch() {
+                document.getElementById('searchInput').value = '';
+                loadRecent();
+            }
+            
+            function displayResults(articles) {
+                const container = document.getElementById('historyResults');
+                
+                if (articles.length === 0) {
+                    container.innerHTML = '<div class="loading">Nenhuma notícia encontrada</div>';
+                    return;
+                }
+                
+                container.innerHTML = articles.map(article => `
+                    <div class="news-item">
+                        <div class="news-title">${escapeHtml(article.title || 'Sem título')}</div>
+                        <div class="news-meta">
+                            ${article.urgencia ? `<span class="priority-badge priority-${article.urgencia.toLowerCase()}">${article.urgencia}</span>` : ''}
+                            <span>📅 ${formatDate(article.added_to_history)}</span>
+                            <span>📰 ${escapeHtml(article.source || 'Fonte desconhecida')}</span>
+                            ${article.confianca ? `<span>🎯 ${article.confianca}% confiança</span>` : ''}
+                        </div>
+                        <div class="news-summary">${escapeHtml(article.summary || 'Sem resumo')}</div>
+                        <div style="margin-top: 0.5rem;">
+                            <a href="${article.link}" target="_blank" style="color: #3498db; text-decoration: none;">🔗 Ver notícia original</a>
+                        </div>
+                    </div>
+                `).join('');
+            }
+            
+            function formatDate(dateString) {
+                if (!dateString) return 'Data desconhecida';
+                try {
+                    return new Date(dateString).toLocaleString('pt-BR');
+                } catch {
+                    return dateString;
+                }
+            }
+            
+            function escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+            
+            // Carrega ao abrir a página
+            loadStats();
+            loadRecent();
+            
+            // Enter para buscar
+            document.getElementById('searchInput').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    searchHistory();
+                }
+            });
+        </script>
+    </body>
+    </html>
+    """
+
+@app.route('/api/historico/recentes')
+def api_historico_recentes():
+    """API para histórico recente"""
+    try:
+        recent = history_manager.get_recent_history(100)
+        return jsonify(recent)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/historico/buscar')
+def api_historico_buscar():
+    """API para buscar no histórico"""
+    try:
+        query = request.args.get('q', '')
+        if not query:
+            return jsonify([])
+        
+        results = history_manager.search_history(query)
+        return jsonify(results)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/historico/estatisticas')
+def api_historico_estatisticas():
+    """API para estatísticas do histórico"""
+    try:
+        stats = history_manager.get_stats()
+        return jsonify(stats)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 # INICIALIZAÇÃO DO SISTEMA
 print("=" * 60)
 print("🚀 BRAZMAR NEWS BOT - INICIANDO NO RENDER")
@@ -399,7 +730,11 @@ print("=" * 60)
 print(f"🔑 Gemini: {'✅ CONFIGURADO' if os.getenv('GEMINI_API_KEY') else '❌ NÃO CONFIGURADO'}")
 print(f"🔑 GitHub: {'✅ CONFIGURADO' if os.getenv('GITHUB_TOKEN') else '❌ NÃO CONFIGURADO'}")
 print(f"🗄️  Database: {'PostgreSQL' if db.use_postgres else 'SQLite'}")
+print(f"📚 Histórico: ✅ ATIVADO")
 print(f"🌐 Porta: {PORT}")
+
+# Garante que CSV existe
+criar_csv_se_nao_existir()
 
 # Baixa CSV do GitHub ao iniciar
 try:
