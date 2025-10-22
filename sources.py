@@ -1,50 +1,64 @@
 RSS_FEEDS = [
-    # Portos e Navios
+    # 🎯 FONTES ESPECÍFICAS NORTE/NORDESTE
     "https://www.portosenavios.com.br/feed",
+    "https://www.portosermercados.com.br/feed",
+    "https://www.martime.com.br/feed/",
     
-    # Governo Federal
+    # 🎯 GOVERNO FEDERAL - TRANSPORTE
     "https://www.gov.br/antaq/pt-br/rss.xml",
-    "https://www.gov.br/mdic/pt-br/rss.xml", 
+    "https://www.gov.br/mdic/pt-br/rss.xml",
     "https://www.gov.br/pt-br/rss.xml",
     "https://www.gov.br/agricultura/pt-br/rss.xml",
     "https://www.gov.br/ibama/pt-br/rss.xml",
     
-    # Marinha do Brasil
+    # 🎯 MARINHA - COMANDOS REGIONAIS
     "https://www.marinha.mil.br/rss.xml",
     
-    # Agência Brasil
+    # 🎯 AGÊNCIAS DE NOTÍCIAS
     "https://agenciabrasil.ebc.com.br/feed",
+    "https://www.migalhas.com.br/coluna/migalhas-maritimas/feed",
     
-    # Migalhas Marítimas
-    "https://www.migalhas.com.br/coluna/migalhas-maritimas/feed"
+    # 🎯 NOVAS FONTES ESPECIALIZADAS
+    "https://www.segurosnews.com.br/feed",
+    "https://www.logweb.com.br/feed/",
+    "https://www.transportabrasil.com.br/feed/",
+    
+    # 🎯 JORNAIS REGIONAIS NORTE/NORDESTE
+    "https://www.oestadoce.com.br/feed/",
+    "https://www.oliberal.com/rss/ultimas",
+    "https://www.jornaldacidadeonline.com.br/feed",
+    "https://www.diariodonordeste.com.br/rss",
 ]
 
 SCRAPE_SITES = [
-    # PORTOS E NAVIOS
-    "https://www.portosenavios.com.br/noticias/",
+    # 🎯 PORTOS ESPECÍFICOS
+    "https://www.portoitaqui.ma.gov.br/noticias/",
+    "https://www.portodoceara.com/noticias/",
+    "https://www.portodesuape.com/noticias/",
     
-    # GOVERNO FEDERAL - TRANSPORTE AQUAVIÁRIO
+    # 🎯 GOVERNO FEDERAL
     "https://www.gov.br/antaq/pt-br/central-de-conteudos/noticias",
     "https://www.gov.br/pt-br/categorias/transito-e-transportes/aquaviario/transporte",
-    
-    # GOVERNO FEDERAL - GERAL
     "https://www.gov.br/pt-br/noticias",
-    "https://www.gov.br/agricultura/pt-br/noticias",
     "https://www.gov.br/ibama/pt-br/assuntos/noticias",
     "https://www.gov.br/pf/pt-br/assuntos/noticias",
     
-    # MARINHA DO BRASIL - COMANDOS
-    "https://www.marinha.mil.br/secirm/noticias",  # SECIRM
-    "https://www.marinha.mil.br/dpc/noticias",     # Diretoria de Portos e Costas
-    "https://www.marinha.mil.br/cpaor/noticias",   # Comando do 1º Distrito Naval
-    "https://www.marinha.mil.br/cpma/noticias",    # Comando do 2º Distrito Naval  
-    "https://www.marinha.mil.br/cpap/noticias",    # Comando do 3º Distrito Naval
-    "https://www.marinha.mil.br/cpba/noticias",    # Comando do 4º Distrito Naval
-    "https://www.marinha.mil.br/cpce/noticias",    # Comando do 5º Distrito Naval
+    # 🎯 MARINHA - COMANDOS NORTE/NORDESTE
+    "https://www.marinha.mil.br/secirm/noticias",  # 1º Distrito (Norte)
+    "https://www.marinha.mil.br/cpce/noticias",   # 5º Distrito (Nordeste)
+    "https://www.marinha.mil.br/cpaor/noticias",  # Amazônia Oriental
     
-    # AGÊNCIA BRASIL
+    # 🎯 AGÊNCIAS
     "https://agenciabrasil.ebc.com.br/ultimasnoticias",
+    "https://www.migalhas.com.br/coluna/migalhas-maritimas",
     
-    # MIGALHAS MARÍTIMAS
-    "https://www.migalhas.com.br/coluna/migalhas-maritimas"
+    # 🎯 NOVOS SITES ESPECIALIZADOS
+    "https://www.martime.com.br/noticias/",
+    "https://www.portosermercados.com.br/noticias/",
+    "https://www.segurosnews.com.br/noticias/seguros/",
+    
+    # 🎯 JORNAIS REGIONAIS
+    "https://www.oestadoce.com.br/ultimas-noticias/",
+    "https://www.oliberal.com/ultimas",
+    "https://www.diariodonordeste.com.br/ultimas-noticias",
 ]

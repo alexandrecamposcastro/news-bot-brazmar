@@ -92,24 +92,54 @@ class NewsProcessorCompleto:
     
         return artigos_relevantes
 
-    def pre_filtro_rigoroso(self, artigos):
-        """Pré-filtro MUITO rigoroso - evita chamadas desnecessárias ao Gemini"""
-        artigos_filtrados = []
+    def executar_coleta_completa(self):
+        """Processamento COMPLETO - SEM PRÉ-FILTRO"""
+        print("🚀 INICIANDO COLETA BRAZMAR - GEMINI 100% RESPONSÁVEL")
         
-        for artigo in artigos:
-            texto = (artigo['title'] + ' ' + artigo.get('summary', '')).lower()
-            
-            # ✅ DEVE ter palavra da região
-            tem_regiao = any(keyword in texto for keyword in self.REGIAO_KEYWORDS)
-            
-            # ❌ NÃO PODE ter palavras de outras regiões
-            outras_regioes = ['santos', 'rio de janeiro', 'são paulo', 'paranaguá', 'rio grande', 'sul', 'sudeste']
-            nao_tem_outras = not any(regiao in texto for regiao in outras_regioes)
-            
-            if tem_regiao and nao_tem_outras:
-                artigos_filtrados.append(artigo)
+        todas_noticias = []
         
-        return artigos_filtrados
+        try:
+            # 🎯 FASE 1: BUSCA ATIVA DO GEMINI (DEVERIA ESTAR FUNCIONANDO)
+            print("🔍 INICIANDO BUSCA ATIVA DO GEMINI...")
+            noticias_gemini = gemini_provider.buscar_noticias_ativas()
+            print(f"🎯 Gemini encontrou {len(noticias_gemini)} notícias ativamente")
+            
+            # Converte notícias do Gemini para o formato padrão
+            for noticia in noticias_gemini:
+                noticia['link'] = f"gemini_search_{hash(noticia['title'])}"
+                noticia['summary'] = noticia.get('summary', 'Busca ativa Gemini')
+                noticia['type'] = 'gemini_active_search'
+                todas_noticias.append(noticia)
+            
+            # 🎯 FASE 2: COLETA TRADICIONAL 
+            from scraper import fetch_rss, fetch_scrape
+            artigos_rss = fetch_rss()
+            artigos_scrape = fetch_scrape()
+            todas_noticias.extend(artigos_rss + artigos_scrape)
+            
+            print(f"📰 Total coletado: {len(todas_noticias)} notícias")
+            print(f"   - Busca ativa Gemini: {len(noticias_gemini)}")
+            print(f"   - Fontes tradicionais: {len(artigos_rss + artigos_scrape)}")
+            
+        except Exception as e:
+            print(f"❌ Erro na coleta: {e}")
+            return []
+
+        # 🎯 FASE 3: FILTRAGEM 100% GEMINI (SEM PRÉ-FILTRO)
+        print("🔍 INICIANDO FILTRAGEM 100% GEMINI...")
+        artigos_relevantes = self.filtrar_com_gemini(todas_noticias)
+        print(f"✅ Filtro Gemini: {len(artigos_relevantes)} notícias relevantes")
+
+        # GERA CIRCULAR
+        if artigos_relevantes:
+            circular = circular_expert.generate_circular(artigos_relevantes)
+            self.salvar_circular(circular)
+            print("📨 CIRCULAR GERADA COM SUCESSO!")
+
+        # Salva resultados
+        self.salvar_no_database(artigos_relevantes)
+        
+        return artigos_relevantes
 
     def filtrar_com_gemini(self, artigos):
         """Usa Gemini APENAS para os artigos pré-filtrados"""
