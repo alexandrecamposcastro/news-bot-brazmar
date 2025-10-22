@@ -52,15 +52,15 @@ class GeminiProvider:
         prompt = f"""
         VOCÊ É FILTRO ESPECÍFICO PARA BRAZMAR MARINE SERVICES
 
-        ⚓ BRAZMAR ATUA COM:
+        BRAZMAR ATUA COM:
         - Apoio marítimo a plataformas de petróleo
         - Operações portuárias comerciais
         - Seguros e riscos marítimos
         - Comércio exterior via portos
 
-        🎯 CRITÉRIOS MUITO ESPECÍFICOS - APENAS ISSO É RELEVANTE:
+        CRITÉRIOS MUITO ESPECÍFICOS - APENAS ISSO É RELEVANTE:
 
-        ✅ ACEITAR SOMENTE SE FOR SOBRE:
+        ACEITAR SOMENTE SE FOR SOBRE:
         - OPERAÇÕES PORTUÁRIAS COMERCIAIS (carga, descarga, movimentação)
         - APOIO OFFSHORE a plataformas de petróleo/gás
         - ACIDENTES/INCIDENTES em operações marítimas
@@ -68,7 +68,7 @@ class GeminiProvider:
         - PROBLEMAS OPERACIONAIS (greves, paralisações, condições climáticas)
         - REGULAMENTAÇÕES que afetem operações comerciais
 
-        ❌ REJEITAR SE FOR SOBRE:
+        REJEITAR SE FOR SOBRE:
         - Cursos, treinamentos, formação de pessoal
         - Eventos, cerimônias, homenagens
         - Assuntos administrativos internos
@@ -76,7 +76,7 @@ class GeminiProvider:
         - Nomeações, promoções, mudanças de comando
         - Operações militares não-comerciais
 
-        📍 REGIÃO: APENAS NORTE/NORDESTE BRASIL
+        REGIÃO: APENAS NORTE/NORDESTE BRASIL
 
         TÍTULO: {title}
         RESUMO: {summary}
@@ -108,9 +108,9 @@ class GeminiProvider:
 
         SUA MISSÃO: ENCONTRAR NOTÍCIAS ESPECÍFICAS para a Brazmar Marine Services
 
-        🎯 FOCO ABSOLUTO: NORTE E NORDESTE DO BRASIL
+        FOCO ABSOLUTO: NORTE E NORDESTE DO BRASIL
 
-        🔍 BUSQUE NOTÍCIAS SOBRE:
+        BUSQUE NOTÍCIAS SOBRE:
         - Operações nos portos: Itaqui (MA), Pecém (CE), Suape (PE), São Luís, Fortaleza, Belém, Macapá
         - Apoio marítimo a plataformas de petróleo no Norte/Nordeste
         - Movimentação portuária na região Norte/Nordeste
@@ -118,7 +118,7 @@ class GeminiProvider:
         - Novas regulamentações da ANTAQ/Marinha para a região
         - Clima/condições operacionais nos portos do Norte/Nordeste
 
-        📋 FORMATO DA RESPOSTA:
+        FORMATO DA RESPOSTA:
         Forneça uma LISTA de notícias RECENTES e RELEVANTES com:
         - Título real da notícia
         - Fonte/veículo onde pode ser encontrada

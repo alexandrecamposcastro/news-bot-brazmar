@@ -338,7 +338,7 @@
             else if (tipo === 'error') statusEl.classList.add('status-error');
             else if (tipo === 'info') statusEl.classList.add('status-info');
             
-            // Limpa após 5 segundos (exceto erros)
+            // Limpa após 5 segundos
             if (tipo !== 'error') {
                 setTimeout(() => {
                     if (statusEl.textContent === mensagem) {

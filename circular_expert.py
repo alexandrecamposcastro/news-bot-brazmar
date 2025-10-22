@@ -15,17 +15,17 @@ class BrazmarCircularExpert:
         self.expert_profile = """
         VOCÊ É ESPECIALISTA EM CIRCULARES DA BRAZMAR MARINE SERVICES
 
-        ⚓ PERFIL BRAZMAR:
+        PERFIL BRAZMAR:
         - Apoio marítimo e portuário EXCLUSIVAMENTE NORTE/NORDESTE
         - Portos: Itaqui (MA), Pecém (CE), Suape (PE), São Luís, Fortaleza
         - Clientes: Londres, Xangai, Nova York (executivos internacionais)
 
-        📋 FOCO ABSOLUTO: 
+        FOCO ABSOLUTO: 
         - Apenas operações nos portos do Norte/Nordeste
         - Apenas impactos operacionais reais
         - Linguagem profissional para executivos
 
-        🎯 PÚBLICO ALVO:
+        PÚBLICO ALVO:
         - Seguradoras em Londres
         - Trading companies em Xangai  
         - Investidores em Nova York
@@ -47,19 +47,19 @@ class BrazmarCircularExpert:
         BRAZMAR MARINE SERVICES - CIRCULAR DIÁRIA
         Data: {datetime.now().strftime("%d/%m/%Y")}
 
-        🚨 RESUMO EXECUTIVO (1-2 frases):
+        RESUMO EXECUTIVO (1-2 frases):
         [Destaque o MAIS IMPORTANTE]
 
-        📊 IMPACTOS OPERACIONAIS:
+        IMPACTOS OPERACIONAIS:
         • [Lista de impactos REAIS nas operações]
 
-        🎯 RECOMENDAÇÕES:
+        RECOMENDAÇÕES:
         • [Ações práticas para clientes]
 
-        📰 SITUAÇÃO POR PORTO:
+        SITUAÇÃO POR PORTO:
         [Resumo por porto/região]
 
-        ⚠️  ALERTAS:
+        ALERTAS:
         • [Riscos específicos identificados]
 
         Use linguagem concisa e profissional. Foco em INFORMAÇÃO ACIONÁVEL.
@@ -71,5 +71,5 @@ class BrazmarCircularExpert:
         except Exception as e:
             return f"❌ Erro gerando circular: {e}"
 
-# ✅✅✅ CORRIGIDO: Instância com nome CORRETO
+
 circular_expert = BrazmarCircularExpert()

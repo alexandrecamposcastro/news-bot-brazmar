@@ -44,7 +44,7 @@ class GitHubManager:
             # Prepara dados para upload
             url = f'https://api.github.com/repos/{self.repo}/contents/feedback.csv'
             
-            # Pega SHA do arquivo atual (se existir)
+            # Pega SHA do arquivo atual
             sha = None
             response = requests.get(url, headers=self.headers)
             if response.status_code == 200:
@@ -89,5 +89,5 @@ class GitHubManager:
             print(f"❌ Erro baixando CSV: {e}")
             return False
 
-# Instância global
+
 github_manager = GitHubManager()

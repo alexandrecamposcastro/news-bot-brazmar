@@ -23,12 +23,12 @@ try:
 except Exception as e:
     print(f"⚠️  Aviso dotenv: {e}")
 
-# Importar database HYBRID e novos providers
+# Importar database
 from database_hybrid import db
 from github_manager import github_manager
 from history_manager import history_manager
-from gemini_provider import gemini_provider  # ✅ NOVO - substitui ai_provider
-from circular_expert import circular_expert  # ✅ NOVO - especialista em circulares
+from gemini_provider import gemini_provider
+from circular_expert import circular_expert
 
 class BrazmarDashboard:
     def __init__(self):
@@ -121,7 +121,7 @@ class BrazmarScheduler:
         """Executa coleta OTIMIZADA ao iniciar"""
         print(f"\n🎯 EXECUTANDO COLETA OTIMIZADA - {datetime.now()}")
         try:
-            from news_processor import news_processor  # ✅ Usa instância global otimizada
+            from news_processor import news_processor
             artigos = news_processor.executar_coleta_completa()
             print(f"✅ Coleta otimizada concluída: {len(artigos)} notícias relevantes")
             return artigos
@@ -134,33 +134,29 @@ class BrazmarScheduler:
     def agendar_tarefas(self):
         """Agenda todas as tarefas automáticas"""
         
-        # 🎯 COLETA IMEDIATA ao iniciar (OTIMIZADA)
+        # coleta ao iniciar
         self.executar_coleta_imediata()
         
-        # 🕘 09:00 - Análise completa do dia
+        # 09:00 - Análise completa do dia
         schedule.every().day.at("09:00").do(self.tarefa_analise_completa)
         
-        # 🕛 12:00 - Atualização do meio-dia
+        # 12:00 - Atualização do meio-dia
         schedule.every().day.at("12:00").do(self.tarefa_atualizacao_rapida)
         
-        # 🕒 15:00 - Atualização da tarde
-        schedule.every().day.at("15:00").do(self.tarefa_atualizacao_rapida)
-        
-        # 🕔 17:00 - Resumo executivo
+        # 17:00 - Resumo executivo
         schedule.every().day.at("17:00").do(self.tarefa_resumo_executivo)
         
         print("⏰ AGENDADOR CONFIGURADO (OTIMIZADO):")
         print("   🎯 COLETA IMEDIATA (ao iniciar) - OTIMIZADA")
         print("   🕘 09:00 - Análise completa")
         print("   🕛 12:00 - Atualização rápida")
-        print("   🕒 15:00 - Atualização rápida") 
         print("   🕔 17:00 - Resumo executivo")
     
     def tarefa_analise_completa(self):
         """Tarefa das 09:00 - Análise completa OTIMIZADA"""
         print(f"\n🎯 EXECUTANDO ANÁLISE COMPLETA OTIMIZADA - {datetime.now()}")
         try:
-            from news_processor import news_processor  # ✅ OTIMIZADO
+            from news_processor import news_processor  
             artigos = news_processor.executar_coleta_completa()
             print(f"✅ Análise completa OTIMIZADA: {len(artigos)} notícias")
         except Exception as e:
@@ -170,7 +166,7 @@ class BrazmarScheduler:
         """Tarefas rápidas de atualização OTIMIZADA"""
         print(f"\n⚡ ATUALIZAÇÃO RÁPIDA OTIMIZADA - {datetime.now()}")
         try:
-            from news_processor import news_processor  # ✅ OTIMIZADO
+            from news_processor import news_processor 
             artigos = news_processor.executar_coleta_completa()
             print(f"✅ Atualização rápida OTIMIZADA: {len(artigos)} notícias")
         except Exception as e:
@@ -186,7 +182,7 @@ class BrazmarScheduler:
             total = data.get('total_artigos', 0)
             print(f"📈 RESUMO: {total} notícias totais, {altas} de alta urgência")
             
-            # ✅ NOVO: Gera circular final do dia
+            # Gera circular final do dia
             if total > 0:
                 from news_processor import news_processor
                 artigos_recentes = db.get_recent_articles(20)
@@ -213,7 +209,7 @@ class BrazmarScheduler:
         self.running = False
         print("🛑 Agendador parado")
 
-# Instâncias globais
+
 dashboard = BrazmarDashboard()
 scheduler = BrazmarScheduler()
 
@@ -291,7 +287,7 @@ def api_atualizar():
         print(f"❌ Erro na atualização OTIMIZADA: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
-# ✅ NOVA ROTA: GERAR CIRCULAR EM TEMPO REAL
+
 @app.route('/api/circular', methods=['POST'])
 def api_gerar_circular():
     """Gera circular profissional em tempo real"""
@@ -308,7 +304,7 @@ def api_gerar_circular():
                 "artigos_base": 0
             })
         
-        # Gera circular profissional
+        # Gera circular 
         circular = circular_expert.generate_circular(artigos_recentes)
         
         return jsonify({
@@ -343,14 +339,14 @@ def receber_feedback():
         # Garante que CSV existe
         criar_csv_se_nao_existir()
         
-        # ✅ SALVA NO CSV
+        # Salva no csv
         with open('feedback.csv', 'a', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
             writer.writerow([title, summary, relevant, datetime.now()])
         
         print("✅ Feedback salvo no CSV")
         
-        # ✅ TREINA ML COM O CSV
+        # Treina ML com CSV
         treinar_ml_com_csv()
         
         return jsonify({
@@ -448,7 +444,7 @@ def health_check():
             "error": str(e)
         }), 500
 
-# 🆕 ROTAS DO HISTÓRICO
+# ROTAS DO HISTÓRICO
 @app.route('/historico')
 def historico():
     """Página do histórico de notícias"""
@@ -764,13 +760,13 @@ def api_historico_estatisticas():
 
 # INICIALIZAÇÃO DO SISTEMA OTIMIZADO
 print("=" * 60)
-print("🚀 BRAZMAR NEWS BOT OTIMIZADO - INICIANDO NO RENDER")
+print("🚀 BRAZMAR NEWS BOT - INICIANDO NO RENDER")
 print("=" * 60)
 print(f"🔑 Gemini: {'✅ CONFIGURADO' if os.getenv('GEMINI_API_KEY') else '❌ NÃO CONFIGURADO'}")
 print(f"🔑 GitHub: {'✅ CONFIGURADO' if os.getenv('GITHUB_TOKEN') else '❌ NÃO CONFIGURADO'}")
 print(f"🗄️  Database: {'PostgreSQL' if db.use_postgres else 'SQLite'}")
 print(f"🎯 Região Foco: NORTE/NORDESTE BRASIL")
-print(f"🤖 Provedor IA: Gemini Flash 2.0")
+print(f"🤖 Provedor IA: Gemini Flash 2.5")
 print(f"📊 Rate Limit: 8 RPM máximo")
 print(f"🌐 Porta: {PORT}")
 
@@ -785,10 +781,10 @@ try:
 except Exception as e:
     print(f"⚠️ Erro baixando CSV inicial: {e}")
 
-# Inicia agendador IMEDIATAMENTE
+# Inicia agendador
 try:
     scheduler.iniciar()
-    print("✅ Agendador OTIMIZADO iniciado com COLETA IMEDIATA")
+    print("✅ Agendador iniciado")
 except Exception as e:
     print(f"❌ ERRO no agendador: {e}")
     import traceback

@@ -17,16 +17,12 @@ class BrazmarScheduler:
         # 🕛 12:00 - Atualização do meio-dia
         schedule.every().day.at("12:00").do(self.tarefa_atualizacao_rapida)
         
-        # 🕒 15:00 - Atualização da tarde
-        schedule.every().day.at("15:00").do(self.tarefa_atualizacao_rapida)
-        
         # 🕔 17:00 - Resumo executivo
         schedule.every().day.at("17:00").do(self.tarefa_resumo_executivo)
         
         print("⏰ AGENDADOR BRAZMAR CONFIGURADO:")
         print("   🕘 09:00 - Análise completa (início do dia)")
         print("   🕛 12:00 - Atualização rápida (meio-dia)")
-        print("   🕒 15:00 - Atualização rápida (tarde)")
         print("   🕔 17:00 - Resumo executivo (fim do dia)")
     
     def tarefa_analise_completa(self):

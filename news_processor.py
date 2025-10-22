@@ -50,7 +50,7 @@ class NewsProcessorCompleto:
         todas_noticias = []
     
         try:
-            # 🎯 FASE 1: BUSCA ATIVA DO GEMINI
+            # FASE 1: BUSCA ATIVA DO GEMINI
             print("🔍 INICIANDO BUSCA ATIVA DO GEMINI...")
             noticias_gemini = gemini_provider.buscar_noticias_ativas()
             print(f"🎯 Gemini encontrou {len(noticias_gemini)} notícias ativamente")
@@ -61,7 +61,7 @@ class NewsProcessorCompleto:
                 noticia['summary'] = noticia.get('summary', 'Busca ativa Gemini')
                 todas_noticias.append(noticia)
         
-            # 🎯 FASE 2: COLETA TRADICIONAL (RSS + Scrape)
+            # FASE 2: COLETA TRADICIONAL (RSS + Scrape)
             from scraper import fetch_rss, fetch_scrape
             artigos_rss = fetch_rss()
             artigos_scrape = fetch_scrape()
@@ -99,7 +99,7 @@ class NewsProcessorCompleto:
         todas_noticias = []
         
         try:
-            # 🎯 FASE 1: BUSCA ATIVA DO GEMINI (DEVERIA ESTAR FUNCIONANDO)
+            # FASE 1: BUSCA ATIVA DO GEMINI
             print("🔍 INICIANDO BUSCA ATIVA DO GEMINI...")
             noticias_gemini = gemini_provider.buscar_noticias_ativas()
             print(f"🎯 Gemini encontrou {len(noticias_gemini)} notícias ativamente")
@@ -111,7 +111,7 @@ class NewsProcessorCompleto:
                 noticia['type'] = 'gemini_active_search'
                 todas_noticias.append(noticia)
             
-            # 🎯 FASE 2: COLETA TRADICIONAL 
+            # FASE 2: COLETA 
             from scraper import fetch_rss, fetch_scrape
             artigos_rss = fetch_rss()
             artigos_scrape = fetch_scrape()
@@ -125,7 +125,7 @@ class NewsProcessorCompleto:
             print(f"❌ Erro na coleta: {e}")
             return []
 
-        # 🎯 FASE 3: FILTRAGEM 100% GEMINI (SEM PRÉ-FILTRO)
+        # FASE 3: FILTRAGEM
         print("🔍 INICIANDO FILTRAGEM 100% GEMINI...")
         artigos_relevantes = self.filtrar_com_gemini(todas_noticias)
         print(f"✅ Filtro Gemini: {len(artigos_relevantes)} notícias relevantes")
@@ -224,5 +224,5 @@ class NewsProcessorCompleto:
 
         print(f"💾 Database: {novos} novos artigos salvos")
 
-# Instância global
+
 news_processor = NewsProcessorCompleto()

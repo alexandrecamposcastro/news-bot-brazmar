@@ -109,5 +109,5 @@ class HistoryManager:
         except:
             return {"total_news": 0, "last_updated": "Nunca", "recent_added": 0}
 
-# Instância global
+
 history_manager = HistoryManager()
