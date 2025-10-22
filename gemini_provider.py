@@ -4,6 +4,8 @@ import json
 import re
 from datetime import datetime
 import time
+import requests
+from bs4 import BeautifulSoup
 
 class GeminiProvider:
     def __init__(self):
@@ -12,9 +14,9 @@ class GeminiProvider:
             raise Exception("❌ GEMINI_API_KEY não configurada")
         
         genai.configure(api_key=self.api_key)
-        self.model = genai.GenerativeModel('gemini-2.0-flash')  # Seu modelo principal
+        self.model = genai.GenerativeModel('gemini-2.5-flash')
         self.last_request_time = 0
-        self.min_interval = 7  # 7 segundos = ~8 RPM (abaixo do seu limite)
+        self.min_interval = 7
         self.request_count = 0
         self.reset_time = time.time()
         
@@ -24,12 +26,10 @@ class GeminiProvider:
         """Garante que não estoura os limites"""
         now = time.time()
         
-        # Reset a cada minuto
         if now - self.reset_time >= 60:
             self.request_count = 0
             self.reset_time = now
         
-        # Limite de 8 requests por minuto
         if self.request_count >= 8:
             sleep_time = 60 - (now - self.reset_time)
             if sleep_time > 0:
@@ -38,7 +38,6 @@ class GeminiProvider:
             self.request_count = 0
             self.reset_time = time.time()
         
-        # Intervalo entre requests
         elapsed = now - self.last_request_time
         if elapsed < self.min_interval:
             time.sleep(self.min_interval - elapsed)
@@ -86,6 +85,75 @@ class GeminiProvider:
             print(f"❌ Erro Gemini: {e}")
             return self._get_fallback_response()
 
+    def buscar_noticias_ativas(self):
+        """🎯 NOVO: BUSCA ATIVA DE NOTÍCIAS COM GEMINI"""
+        self._rate_limit()
+        
+        prompt = """
+        VOCÊ É CAÇADOR DE NOTÍCIAS DA BRAZMAR MARINE SERVICES
+
+        SUA MISSÃO: ENCONTRAR NOTÍCIAS ESPECÍFICAS para a Brazmar Marine Services
+
+        🎯 FOCO ABSOLUTO: NORTE E NORDESTE DO BRASIL
+
+        🔍 BUSQUE NOTÍCIAS SOBRE:
+        - Operações nos portos: Itaqui (MA), Pecém (CE), Suape (PE), São Luís, Fortaleza, Belém, Macapá
+        - Apoio marítimo a plataformas de petróleo no Norte/Nordeste
+        - Movimentação portuária na região Norte/Nordeste
+        - Incidentes/acidentes marítimos nos portos da Brazmar
+        - Novas regulamentações da ANTAQ/Marinha para a região
+        - Clima/condições operacionais nos portos do Norte/Nordeste
+
+        📋 FORMATO DA RESPOSTA:
+        Forneça uma LISTA de notícias RECENTES e RELEVANTES com:
+        - Título real da notícia
+        - Fonte/veículo onde pode ser encontrada
+        - Breve descrição do conteúdo
+        - Data aproximada da notícia
+
+        Exemplo:
+        1. "Porto de Itaqui bate recorde de movimentação de grãos" - Jornal O Estado do MA - Movimentação de soja no porto aumentou 15% - Outubro 2025
+        2. "Marinha autoriza novas operações offshore no Ceará" - Site da Marinha - Liberada perfuração em nova área da Bacia do Ceará - Outubro 2025
+
+        Liste pelo menos 8-10 notícias RECENTES e RELEVANTES.
+        """
+        
+        try:
+            response = self.model.generate_content(prompt)
+            return self._parse_busca_ativa(response.text)
+        except Exception as e:
+            print(f"❌ Erro na busca ativa: {e}")
+            return []
+
+    def _parse_busca_ativa(self, response_text):
+        """Converte a busca ativa em notícias estruturadas"""
+        noticias = []
+        linhas = response_text.split('\n')
+        
+        for linha in linhas:
+            linha = linha.strip()
+            # Procura por padrões de notícias (números, títulos, fontes)
+            if re.match(r'^\d+[\.\)]', linha) and any(keyword in linha.lower() for keyword in ['porto', 'marinha', 'operacao', 'navio', 'petroleo']):
+                # Extrai informações básicas
+                partes = re.split(r' - ', linha)
+                if len(partes) >= 3:
+                    titulo = partes[0].replace('"', '').strip()
+                    # Remove o número do início se existir
+                    titulo = re.sub(r'^\d+[\.\)]\s*', '', titulo)
+                    
+                    fonte = partes[1].strip()
+                    descricao = partes[2].strip()
+                    
+                    noticias.append({
+                        'title': titulo,
+                        'source': fonte,
+                        'summary': descricao,
+                        'type': 'gemini_active_search',
+                        'search_timestamp': datetime.now().isoformat()
+                    })
+        
+        return noticias[:10]  # Limita a 10 notícias
+
     def _parse_response(self, response_text):
         """Parse da resposta do Gemini"""
         try:
@@ -103,7 +171,7 @@ class GeminiProvider:
     def _get_fallback_response(self):
         """Fallback SUPER RESTRITIVO"""
         return {
-            "relevante": False,  # ❌ NÃO DEIXA PASSAR NADA
+            "relevante": False,
             "confianca": 10,
             "motivo": "Análise falhou - conservador",
             "urgencia": "BAIXA"

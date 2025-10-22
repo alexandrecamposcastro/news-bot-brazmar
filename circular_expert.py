@@ -32,12 +32,21 @@ class BrazmarCircularExpert:
         """
 
     def generate_circular(self, noticias_relevantes):
-        """Gera circular profissional"""
+        """Gera circular profissional - adaptado para notícias sem link"""
         if not noticias_relevantes:
             return "📭 SEM NOTÍCIAS RELEVANTES HOJE - Nada a reportar para o Norte/Nordeste"
 
+        # Agrupa notícias por tipo
+        noticias_gemini = [n for n in noticias_relevantes if n.get('type') == 'gemini_active_search']
+        noticias_tradicionais = [n for n in noticias_relevantes if n.get('type') != 'gemini_active_search']
+    
         prompt = f"""
         {self.expert_profile}
+
+        📊 RESUMO DAS NOTÍCIAS:
+        - Notícias encontradas ativamente: {len(noticias_gemini)}
+        - Notícias de fontes tradicionais: {len(noticias_tradicionais)}
+        - Total: {len(noticias_relevantes)} notícias relevantes
 
         NOTÍCIAS RELEVANTES DO DIA (APENAS NORTE/NORDESTE):
         {json.dumps(noticias_relevantes, ensure_ascii=False, indent=2)}
@@ -46,23 +55,25 @@ class BrazmarCircularExpert:
 
         BRAZMAR MARINE SERVICES - CIRCULAR DIÁRIA
         Data: {datetime.now().strftime("%d/%m/%Y")}
+        Fontes: {len(noticias_gemini)} buscas ativas + {len(noticias_tradicionais)} fontes tradicionais
 
-        🚨 RESUMO EXECUTIVO (1-2 frases):
-        [Destaque o MAIS IMPORTANTE]
+        🚨 RESUMO EXECUTIVO:
+        [Destaque os 3 pontos MAIS IMPORTANTES do dia]
 
         📊 IMPACTOS OPERACIONAIS:
-        • [Lista de impactos REAIS nas operações]
+        • [Lista de impactos REAIS nas operações da Brazmar]
 
-        🎯 RECOMENDAÇÕES:
-        • [Ações práticas para clientes]
+        🎯 RECOMENDAÇÕES PARA CLIENTES:
+        • [Ações práticas para seguradoras/trading companies]
 
-        📰 SITUAÇÃO POR PORTO:
-        [Resumo por porto/região]
+        📰 DESTAQUES POR PORTO/REGIÃO:
+        [Resumo organizado por localização geográfica]
 
-        ⚠️  ALERTAS:
+        ⚠️  ALERTAS E RISCOS:
         • [Riscos específicos identificados]
 
         Use linguagem concisa e profissional. Foco em INFORMAÇÃO ACIONÁVEL.
+        Destaque especialmente as notícias encontradas via busca ativa.
         """
 
         try:
@@ -70,6 +81,3 @@ class BrazmarCircularExpert:
             return response.text
         except Exception as e:
             return f"❌ Erro gerando circular: {e}"
-
-# Instância global
-circular_expert = BrazmarCircularExpert()

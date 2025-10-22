@@ -44,27 +44,42 @@ class NewsProcessorCompleto:
             self.ml_model = None
 
     def executar_coleta_completa(self):
-        """Processamento OTIMIZADO - menos chamadas Gemini"""
-        print("🚀 INICIANDO COLETA BRAZMAR - FOCO NORTE/NORDESTE")
-        
+        """Processamento COMPLETO com BUSCA ATIVA do Gemini"""
+        print("🚀 INICIANDO COLETA BRAZMAR - BUSCA ATIVA + FILTRAGEM")
+    
+        todas_noticias = []
+    
         try:
+            # 🎯 FASE 1: BUSCA ATIVA DO GEMINI
+            print("🔍 INICIANDO BUSCA ATIVA DO GEMINI...")
+            noticias_gemini = gemini_provider.buscar_noticias_ativas()
+            print(f"🎯 Gemini encontrou {len(noticias_gemini)} notícias ativamente")
+        
+            # Converte notícias do Gemini para o formato padrão
+            for noticia in noticias_gemini:
+                noticia['link'] = f"gemini_search_{hash(noticia['title'])}"
+                noticia['summary'] = noticia.get('summary', 'Busca ativa Gemini')
+                todas_noticias.append(noticia)
+        
+            # 🎯 FASE 2: COLETA TRADICIONAL (RSS + Scrape)
             from scraper import fetch_rss, fetch_scrape
             artigos_rss = fetch_rss()
             artigos_scrape = fetch_scrape()
-            todos_artigos = artigos_rss + artigos_scrape
-            
-            print(f"📰 {len(todos_artigos)} notícias coletadas")
+            todas_noticias.extend(artigos_rss + artigos_scrape)
+        
+            print(f"📰 Total coletado: {len(todas_noticias)} notícias (Gemini: {len(noticias_gemini)} + Tradicional: {len(artigos_rss + artigos_scrape)})")
+        
         except Exception as e:
-            print(f"❌ Erro coleta: {e}")
+            print(f"❌ Erro na coleta: {e}")
             return []
 
-        # PRÉ-FILTRO RIGOROSO ANTES de chamar Gemini
-        artigos_pre_filtrados = self.pre_filtro_rigoroso(todos_artigos)
-        print(f"🔍 Pré-filtro: {len(todos_artigos)} → {len(artigos_pre_filtrados)}")
+        # PRÉ-FILTRO RIGOROSO
+        artigos_pre_filtrados = self.pre_filtro_rigoroso(todas_noticias)
+        print(f"🔍 Pré-filtro: {len(todas_noticias)} → {len(artigos_pre_filtrados)}")
 
-        # Só chama Gemini para os que passaram no pré-filtro
+        # FILTRAGEM GEMINI
         artigos_relevantes = self.filtrar_com_gemini(artigos_pre_filtrados)
-        print(f"✅ Gemini: {len(artigos_relevantes)} notícias relevantes")
+        print(f"✅ Filtro Gemini: {len(artigos_relevantes)} notícias relevantes")
 
         # GERA CIRCULAR
         if artigos_relevantes:
@@ -74,7 +89,7 @@ class NewsProcessorCompleto:
 
         # Salva resultados
         self.salvar_no_database(artigos_relevantes)
-        
+    
         return artigos_relevantes
 
     def pre_filtro_rigoroso(self, artigos):
