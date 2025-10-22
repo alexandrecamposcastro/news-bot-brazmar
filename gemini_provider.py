@@ -46,34 +46,48 @@ class GeminiProvider:
         self.request_count += 1
 
     def analyze_article(self, title, summary):
-        """Analisa com critérios MUITO rigorosos - APENAS Norte/Nordeste"""
+        """Analisa com critérios MUITO MAIS ESPECÍFICOS"""
         self._rate_limit()
         
         prompt = f"""
-        VOCÊ É FILTRO DA BRAZMAR MARINE SERVICES - APENAS NORTE/NORDESTE
+        VOCÊ É FILTRO ESPECÍFICO PARA BRAZMAR MARINE SERVICES
 
-        REGRA ABSOLUTA: SÓ NOTÍCIAS DO NORTE/NORDESTE BRASILEIRO
+        ⚓ BRAZMAR ATUA COM:
+        - Apoio marítimo a plataformas de petróleo
+        - Operações portuárias comerciais
+        - Seguros e riscos marítimos
+        - Comércio exterior via portos
 
-        ✅ ACEITAR SOMENTE SE MENCIONAR EXPLICITAMENTE:
-        - Maranhão, Ceará, Piauí, Bahia, Pernambuco, Alagoas, Sergipe, Paraíba, Rio Grande do Norte, Amapá, Pará, Amazonas, Rondônia, Acre, Roraima, Tocantins
-        - Porto de Itaqui, Pecém, Suape, São Luís, Fortaleza, Belém, Macapá, Manaus, Recife, Salvador, Natal
-        - Região Norte, Região Nordeste
+        🎯 CRITÉRIOS MUITO ESPECÍFICOS - APENAS ISSO É RELEVANTE:
 
-        ❌ REJEITAR TUDO QUE FOR:
-        - Santos, Rio de Janeiro, São Paulo, Sul, Sudeste
-        - Qualquer porto/região fora do Norte/Nordeste
-        - Notícias genéricas sem localização específica
+        ✅ ACEITAR SOMENTE SE FOR SOBRE:
+        - OPERAÇÕES PORTUÁRIAS COMERCIAIS (carga, descarga, movimentação)
+        - APOIO OFFSHORE a plataformas de petróleo/gás
+        - ACIDENTES/INCIDENTES em operações marítimas
+        - NOVAS ROTAS/OPERACOES comerciais nos portos
+        - PROBLEMAS OPERACIONAIS (greves, paralisações, condições climáticas)
+        - REGULAMENTAÇÕES que afetem operações comerciais
+
+        ❌ REJEITAR SE FOR SOBRE:
+        - Cursos, treinamentos, formação de pessoal
+        - Eventos, cerimônias, homenagens
+        - Assuntos administrativos internos
+        - Atividades educacionais ou culturais
+        - Nomeações, promoções, mudanças de comando
+        - Operações militares não-comerciais
+
+        📍 REGIÃO: APENAS NORTE/NORDESTE BRASIL
 
         TÍTULO: {title}
         RESUMO: {summary}
 
-        Esta notícia é ESPECIFICAMENTE sobre a REGIÃO NORTE/NORDESTE brasileira?
+        Esta notícia tem IMPACTO DIRETO nas OPERAÇÕES COMERCIAIS da Brazmar?
 
         Responda APENAS com JSON:
         {{
             "relevante": true/false,
             "confianca": 0-100,
-            "motivo": "explicação CURTA",
+            "motivo": "explicação CURTA e específica",
             "urgencia": "BAIXA/MEDIA/ALTA"
         }}
         """
